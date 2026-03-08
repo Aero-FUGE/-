@@ -20,6 +20,9 @@ import { useMapEngine } from './hooks/useMapEngine';
 import { useLoopEngine } from './hooks/useLoopEngine';
 import { useTaskEngine } from './hooks/useTaskEngine';
 import { useProgressEngine } from './hooks/useProgressEngine';
+import { db } from './lib/firebase';
+import { ref, onValue, set } from 'firebase/database';
+const INITIAL_DOMAINS: Domain[] = [
 
 const INITIAL_DOMAINS: Domain[] = [
   { id: 'd1', name: '音乐创作', color: '#0df2f2', x: 200, y: 100, width: 400, height: 400 },
@@ -107,6 +110,29 @@ export default function App() {
     projects, setProjects, draggingProjectId, setDraggingProjectId, 
     scaleRing, deleteProject, dragRing 
   } = useLoopEngine(INITIAL_PROJECTS);
+// ============================
+// Firebase 同步系统
+// ============================
+
+// 从 Firebase 读取
+useEffect(() => {
+  const projectsRef = ref(db, "projects");
+
+  const unsubscribe = onValue(projectsRef, (snapshot) => {
+    const data = snapshot.val();
+    if (data) {
+      setProjects(data);
+    }
+  });
+
+  return () => unsubscribe();
+}, []);
+
+// 写入 Firebase
+useEffect(() => {
+  const projectsRef = ref(db, "projects");
+  set(projectsRef, projects);
+}, [projects]);
 
   const [domains, setDomains] = useState<Domain[]>(INITIAL_DOMAINS);
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
