@@ -13,7 +13,6 @@ import { getLevelFromXP, getNextLevelXP } from './constants/levels';
 import { ChatMessage, Project, TaskStatus, Achievement, UserStats, SystemLogEntry, Domain } from './types';
 import { Ring } from './components/Ring';
 import { SidePanel } from './components/SidePanel';
-import { AITerminal } from './components/AITerminal';
 
 // Import Engines
 import { useMapEngine } from './hooks/useMapEngine';
@@ -514,16 +513,7 @@ useEffect(() => {
         achievements={achievements}
       />
 
-      {/* AI Terminal */}
-      <AITerminal 
-        projects={projects}
-        messages={messages}
-        setMessages={setMessages}
-        onUpdateProjects={(newProjects) => {
-          setProjects(newProjects);
-          checkAchievements(newProjects, stats);
-        }}
-      />
+     
 
       {/* Bottom Nav */}
       <nav className="h-16 border-t border-primary/20 bg-background-dark/80 backdrop-blur-md px-6 flex items-center justify-center gap-12 z-40">
