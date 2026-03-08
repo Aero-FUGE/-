@@ -59,6 +59,20 @@ export default function App() {
   const mapRef = useRef<HTMLDivElement>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
+  const [sessionStartTime] = useState(Date.now());
+  const [uptime, setUptime] = useState('00:00:00');
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const seconds = Math.floor((Date.now() - sessionStartTime) / 1000);
+      const h = Math.floor(seconds / 3600);
+      const m = Math.floor((seconds % 3600) / 60);
+      const s = seconds % 60;
+      setUptime(`${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`);
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [sessionStartTime]);
+
   // 1. Progress Engine
   const { 
     stats, setStats, achievements, systemLogs, 
@@ -234,6 +248,10 @@ export default function App() {
           </div>
         </div>
         <div className="hidden md:flex items-center gap-8">
+          <div className="flex flex-col items-center px-4 border-x border-primary/10">
+            <span className="text-[8px] text-white/20 uppercase tracking-[0.2em] mb-1">系统运行时间</span>
+            <span className="text-xs font-mono text-primary tracking-widest">{uptime}</span>
+          </div>
           <div className="flex flex-col items-end">
             <div className="flex items-center gap-2 mb-1">
               <Trophy size={12} className="text-primary" />

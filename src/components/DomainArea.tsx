@@ -190,6 +190,23 @@ export const DomainArea: React.FC<DomainAreaProps> = ({
       <div className="absolute top-0 right-0 w-8 h-8 border-t-2 border-r-2 rounded-tr-[40px] pointer-events-none" style={{ borderColor: domain.color }} />
       <div className="absolute bottom-0 left-0 w-8 h-8 border-b-2 border-l-2 rounded-bl-[40px] pointer-events-none" style={{ borderColor: domain.color }} />
       <div className="absolute bottom-0 right-0 w-8 h-8 border-b-2 border-r-2 rounded-br-[40px] pointer-events-none" style={{ borderColor: domain.color }} />
+
+      {/* Scanning Line Effect */}
+      <motion.div 
+        className="absolute left-0 right-0 h-[1px] pointer-events-none opacity-20"
+        style={{ 
+          background: `linear-gradient(90deg, transparent, ${domain.color}, transparent)`,
+          top: 0
+        }}
+        animate={{
+          top: ['0%', '100%', '0%']
+        }}
+        transition={{
+          duration: 8,
+          repeat: Infinity,
+          ease: "linear"
+        }}
+      />
     </motion.div>
   );
 };

@@ -147,7 +147,7 @@ export const Ring: React.FC<RingProps> = ({ project, x, y, isSelected, onClick, 
 
         {/* Selection Highlight */}
         {isSelected && (
-          <circle
+          <motion.circle
             cx={center}
             cy={center}
             r={radius + strokeWidth + 4}
@@ -155,7 +155,16 @@ export const Ring: React.FC<RingProps> = ({ project, x, y, isSelected, onClick, 
             stroke={project.color}
             strokeWidth={1}
             strokeDasharray="4 4"
-            className="animate-[spin_10s_linear_infinite]"
+            animate={{
+              scale: [1, 1.05, 1],
+              opacity: [0.5, 1, 0.5],
+              rotate: 360
+            }}
+            transition={{
+              scale: { duration: 2, repeat: Infinity, ease: "easeInOut" },
+              opacity: { duration: 2, repeat: Infinity, ease: "easeInOut" },
+              rotate: { duration: 10, repeat: Infinity, ease: "linear" }
+            }}
           />
         )}
 
