@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, Activity, Terminal, Calendar, Zap, CheckCircle2, PlusCircle } from 'lucide-react';
+import { X, Activity, Terminal, Calendar, Zap, CheckCircle2, PlusCircle, Trophy } from 'lucide-react';
 import { SystemLogEntry } from '../types';
 import { cn } from '../lib/utils';
 
@@ -45,6 +45,8 @@ export const SystemLog: React.FC<SystemLogProps> = ({
       case 'TASK_PROGRESS': return <Zap size={14} className="text-yellow-400" />;
       case 'RING_CREATED': return <PlusCircle size={14} className="text-secondary" />;
       case 'RING_COMPLETED': return <CheckCircle2 size={14} className="text-primary" />;
+      case 'LEVEL_UP': return <Trophy size={14} className="text-primary" />;
+      case 'XP_GAIN': return <Zap size={14} className="text-primary" />;
       default: return <Terminal size={14} className="text-white/40" />;
     }
   };
@@ -128,6 +130,11 @@ export const SystemLog: React.FC<SystemLogProps> = ({
                               <span className="text-[10px] text-primary/60 uppercase tracking-tighter font-bold">
                                 {log.eventName}
                               </span>
+                              {log.xpAmount && (
+                                <span className="text-[8px] px-1 bg-primary/20 border border-primary/30 text-primary rounded font-bold">
+                                  +{log.xpAmount} XP
+                                </span>
+                              )}
                             </div>
                             <div className="text-xs text-white/80 mt-0.5">
                               {log.targetName}

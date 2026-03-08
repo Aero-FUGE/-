@@ -3,6 +3,8 @@ import { motion, AnimatePresence } from 'motion/react';
 import { X, User, Trophy, BarChart3, Clock, Calendar, Edit2, Check, Shield } from 'lucide-react';
 import { Achievement, UserStats } from '../types';
 import { cn } from '../lib/utils';
+import { getLevelFromXP, getNextLevelXP } from '../constants/levels';
+import { IconMap } from '../constants/icons';
 
 interface ProfilePanelProps {
   isOpen: boolean;
@@ -22,10 +24,14 @@ export const ProfilePanel: React.FC<ProfilePanelProps> = ({
   const [isEditing, setIsEditing] = React.useState(false);
   const [tempNickname, setTempNickname] = React.useState(stats.nickname);
 
+  const levelInfo = getLevelFromXP(stats.xp);
+  const nextLevelXP = getNextLevelXP(levelInfo.level);
+  const currentLevelThreshold = levelInfo.xpThreshold;
+  const progressInLevel = stats.xp - currentLevelThreshold;
+  const totalInLevel = nextLevelXP - currentLevelThreshold;
+  const xpProgressPercent = totalInLevel > 0 ? Math.min(100, (progressInLevel / totalInLevel) * 100) : 100;
+
   const unlockedAchievements = achievements.filter(a => a.unlockedAt);
-  const currentTitle = unlockedAchievements.length > 0 
-    ? unlockedAchievements[unlockedAchievements.length - 1].title 
-    : '系统绑定者';
 
   const handleSaveNickname = () => {
     onUpdateNickname(tempNickname);
@@ -63,11 +69,16 @@ export const ProfilePanel: React.FC<ProfilePanelProps> = ({
               </div>
               
               <div className="relative z-10">
-                <div className="flex items-center gap-4 mb-4">
-                  <div className="w-16 h-16 rounded-xl bg-primary/20 border border-primary/40 flex items-center justify-center text-primary">
-                    <User size={32} />
+                <div className="flex items-center gap-4 mb-6">
+                  <div className="relative shrink-0">
+                    <div className="w-16 h-16 rounded-2xl bg-primary/20 border border-primary/40 flex items-center justify-center text-primary shadow-[0_0_20px_rgba(13,242,242,0.2)]">
+                      <User size={32} />
+                    </div>
+                    <div className="absolute -bottom-2 -right-2 w-8 h-8 rounded-full bg-background-dark border-2 border-primary flex items-center justify-center text-[10px] font-bold text-primary shadow-lg">
+                      Lv{levelInfo.level}
+                    </div>
                   </div>
-                  <div className="flex-1">
+                  <div className="flex-1 min-w-0">
                     {isEditing ? (
                       <div className="flex items-center gap-2">
                         <input
@@ -82,28 +93,38 @@ export const ProfilePanel: React.FC<ProfilePanelProps> = ({
                       </div>
                     ) : (
                       <div className="flex items-center gap-2">
-                        <h3 className="text-xl font-bold text-white">{stats.nickname}</h3>
-                        <button onClick={() => setIsEditing(true)} className="text-white/20 hover:text-primary transition-colors">
+                        <h3 className="text-xl font-bold text-white truncate">{stats.nickname}</h3>
+                        <button onClick={() => setIsEditing(true)} className="text-white/20 hover:text-primary transition-colors shrink-0">
                           <Edit2 size={14} />
                         </button>
                       </div>
                     )}
-                    <div className="text-primary/60 text-xs font-bold uppercase tracking-widest mt-1">
-                      {currentTitle}
+                    <div className="text-primary font-bold text-xs uppercase tracking-[0.2em] mt-1 drop-shadow-[0_0_8px_rgba(13,242,242,0.5)]">
+                      {levelInfo.identity}
                     </div>
                   </div>
                 </div>
 
-                <div className="space-y-2">
-                  <div className="flex justify-between text-[10px] uppercase tracking-widest text-white/40">
-                    <span>系统同步率</span>
-                    <span>{Math.round((unlockedAchievements.length / achievements.length) * 100)}%</span>
+                <div className="space-y-3">
+                  <div className="flex justify-between items-end">
+                    <div className="flex flex-col">
+                      <span className="text-[8px] uppercase tracking-widest text-white/40 mb-1">经验进度</span>
+                      <span className="text-xs font-mono text-white">
+                        {stats.xp} <span className="text-white/20">/ {nextLevelXP}</span>
+                      </span>
+                    </div>
+                    <div className="text-right">
+                      <span className="text-[8px] uppercase tracking-widest text-primary/60 mb-1 block">距离升级</span>
+                      <span className="text-xs font-mono text-primary">
+                        {nextLevelXP - stats.xp} XP
+                      </span>
+                    </div>
                   </div>
-                  <div className="w-full h-1.5 bg-white/5 rounded-full overflow-hidden">
+                  <div className="w-full h-2 bg-white/5 rounded-full overflow-hidden border border-white/10 p-[1px]">
                     <motion.div 
                       initial={{ width: 0 }}
-                      animate={{ width: `${(unlockedAchievements.length / achievements.length) * 100}%` }}
-                      className="h-full bg-primary shadow-[0_0_10px_rgba(13,242,242,0.5)]"
+                      animate={{ width: `${xpProgressPercent}%` }}
+                      className="h-full bg-gradient-to-r from-primary/40 to-primary rounded-full shadow-[0_0_15px_rgba(13,242,242,0.6)]"
                     />
                   </div>
                 </div>
@@ -149,19 +170,21 @@ export const ProfilePanel: React.FC<ProfilePanelProps> = ({
                 已获得成就 ({unlockedAchievements.length})
               </h4>
               <div className="grid grid-cols-4 gap-3">
-                {unlockedAchievements.map(a => (
-                  <div 
-                    key={a.id} 
-                    className="aspect-square bg-primary/10 border border-primary/30 rounded-lg flex items-center justify-center text-primary group relative"
-                    title={a.title}
-                  >
-                    <span className="text-xl">{a.icon}</span>
-                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-32 p-2 bg-background-dark border border-primary/30 rounded text-[8px] opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50">
-                      <div className="font-bold text-primary mb-1">{a.title}</div>
-                      <div className="text-white/60">{a.description}</div>
+                {unlockedAchievements.map(a => {
+                  const Icon = IconMap[a.icon] || Trophy;
+                  return (
+                    <div 
+                      key={a.id} 
+                      className="aspect-square bg-primary/10 border border-primary/30 rounded-lg flex items-center justify-center text-primary group relative"
+                    >
+                      <Icon size={20} />
+                      <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-32 p-2 bg-background-dark border border-primary/30 rounded text-[8px] opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50">
+                        <div className="font-bold text-primary mb-1">{a.title}</div>
+                        <div className="text-white/60">{a.description}</div>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
                 {Array.from({ length: Math.max(0, 8 - unlockedAchievements.length) }).map((_, i) => (
                   <div key={i} className="aspect-square bg-white/5 border border-white/5 rounded-lg flex items-center justify-center text-white/10">
                     <Trophy size={16} />

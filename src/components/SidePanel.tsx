@@ -1,6 +1,6 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, Clock, CheckCircle2, Circle, Trash2, Plus, Minus, Maximize2, FileText, ChevronRight } from 'lucide-react';
+import { X, Clock, CheckCircle2, Circle, Trash2, Plus, Minus, Maximize2, FileText, ChevronRight, Play, Pause, Square } from 'lucide-react';
 import { Project, Task, TaskStatus, Domain } from '../types';
 import { cn } from '../lib/utils';
 import { NoteEditor } from './NoteEditor';
@@ -22,9 +22,103 @@ export const SidePanel: React.FC<SidePanelProps> = ({
   onDeleteProject,
   onAddTask,
 }) => {
-  const [editingNoteTask, setEditingNoteTask] = React.useState<Task | null>(null);
+  const [editingNoteTask, setEditingNoteTask] = useState<Task | null>(null);
+  const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
+  const [currentTime, setCurrentTime] = useState<number>(0);
+
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+    const activeTask = project?.tasks.find(t => t.isTimerRunning);
+    
+    if (activeTask && activeTask.timerStartTime) {
+      setActiveTaskId(activeTask.id);
+      interval = setInterval(() => {
+        const elapsed = Math.floor((Date.now() - activeTask.timerStartTime!) / 1000);
+        setCurrentTime((activeTask.timerAccumulatedTime || 0) + elapsed);
+      }, 1000);
+    } else {
+      setActiveTaskId(null);
+      setCurrentTime(0);
+    }
+
+    return () => clearInterval(interval);
+  }, [project?.tasks]);
 
   if (!project) return null;
+
+  const formatTime = (seconds: number) => {
+    const h = Math.floor(seconds / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
+    const s = seconds % 60;
+    return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+  };
+
+  const startTimer = (taskId: string) => {
+    const updatedTasks = project.tasks.map((t) => {
+      // Pause any other running timer
+      if (t.isTimerRunning && t.id !== taskId) {
+        const elapsed = Math.floor((Date.now() - (t.timerStartTime || Date.now())) / 1000);
+        return {
+          ...t,
+          isTimerRunning: false,
+          timerAccumulatedTime: (t.timerAccumulatedTime || 0) + elapsed,
+          timerStartTime: undefined,
+        };
+      }
+      if (t.id === taskId) {
+        return {
+          ...t,
+          isTimerRunning: true,
+          timerStartTime: Date.now(),
+          status: TaskStatus.IN_PROGRESS,
+        };
+      }
+      return t;
+    });
+    onUpdateProject({ ...project, tasks: updatedTasks });
+  };
+
+  const pauseTimer = (taskId: string) => {
+    const updatedTasks = project.tasks.map((t) => {
+      if (t.id === taskId && t.isTimerRunning) {
+        const elapsed = Math.floor((Date.now() - (t.timerStartTime || Date.now())) / 1000);
+        return {
+          ...t,
+          isTimerRunning: false,
+          timerAccumulatedTime: (t.timerAccumulatedTime || 0) + elapsed,
+          timerStartTime: undefined,
+        };
+      }
+      return t;
+    });
+    onUpdateProject({ ...project, tasks: updatedTasks });
+  };
+
+  const endTimer = (taskId: string) => {
+    const updatedTasks = project.tasks.map((t) => {
+      if (t.id === taskId) {
+        let finalAccumulated = t.timerAccumulatedTime || 0;
+        if (t.isTimerRunning && t.timerStartTime) {
+          finalAccumulated += Math.floor((Date.now() - t.timerStartTime) / 1000);
+        }
+        
+        // Convert seconds to minutes for actualTime
+        const additionalMinutes = Math.floor(finalAccumulated / 60);
+        
+        return {
+          ...t,
+          isTimerRunning: false,
+          timerStartTime: undefined,
+          timerAccumulatedTime: 0, // Reset for next time or just keep it 0
+          actualTime: t.actualTime + additionalMinutes,
+          status: TaskStatus.DONE,
+          completedAt: Date.now(),
+        };
+      }
+      return t;
+    });
+    onUpdateProject({ ...project, tasks: updatedTasks });
+  };
 
   const totalTime = project.tasks.reduce((acc, t) => acc + t.estimatedTime, 0);
   const remainingTime = project.tasks
@@ -179,6 +273,44 @@ export const SidePanel: React.FC<SidePanelProps> = ({
                           className="bg-transparent border-none p-0 text-[10px] text-primary w-12 focus:ring-0 font-mono"
                         />
                         <span className="text-[10px] text-white/40 uppercase tracking-tighter">min</span>
+                      </div>
+
+                      {/* Timer UI */}
+                      <div className="flex items-center gap-2 border-l border-white/10 pl-4">
+                        {task.status !== TaskStatus.DONE && (
+                          <>
+                            {task.isTimerRunning ? (
+                              <button 
+                                onClick={() => pauseTimer(task.id)}
+                                className="p-1 text-yellow-400 hover:bg-yellow-400/10 rounded transition-colors"
+                                title="暂停计时"
+                              >
+                                <Pause size={12} fill="currentColor" />
+                              </button>
+                            ) : (
+                              <button 
+                                onClick={() => startTimer(task.id)}
+                                className="p-1 text-green-400 hover:bg-green-400/10 rounded transition-colors"
+                                title="开始计时"
+                              >
+                                <Play size={12} fill="currentColor" />
+                              </button>
+                            )}
+                            <button 
+                              onClick={() => endTimer(task.id)}
+                              className="p-1 text-red-400 hover:bg-red-400/10 rounded transition-colors"
+                              title="结束并完成"
+                            >
+                              <Square size={12} fill="currentColor" />
+                            </button>
+                          </>
+                        )}
+                        <span className={cn(
+                          "text-[10px] font-mono tracking-tighter",
+                          task.isTimerRunning ? "text-primary animate-pulse" : "text-white/40"
+                        )}>
+                          {task.id === activeTaskId ? formatTime(currentTime) : formatTime(task.timerAccumulatedTime || 0)}
+                        </span>
                       </div>
                       
                       <button

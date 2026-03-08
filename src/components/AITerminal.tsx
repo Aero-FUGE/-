@@ -65,7 +65,11 @@ export const AITerminal: React.FC<AITerminalProps> = ({ projects, messages, setM
   };
 
   return (
-    <div className="fixed bottom-8 right-8 z-[60]">
+    <motion.div 
+      drag
+      dragMomentum={false}
+      className="fixed bottom-8 right-8 z-[60]"
+    >
       <AnimatePresence>
         {isOpen && (
           <motion.div
@@ -73,6 +77,7 @@ export const AITerminal: React.FC<AITerminalProps> = ({ projects, messages, setM
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.9, y: 20 }}
             className="absolute bottom-20 right-0 w-[calc(100vw-2rem)] sm:w-[400px] h-[70vh] sm:h-[500px] bg-background-dark/95 backdrop-blur-2xl border border-primary/30 rounded-2xl shadow-2xl flex flex-col overflow-hidden"
+            onMouseDown={(e) => e.stopPropagation()} // Prevent dragging when interacting with terminal
           >
             {/* Header */}
             <div className="p-4 border-b border-primary/20 bg-primary/5 flex items-center gap-2">
@@ -158,6 +163,6 @@ export const AITerminal: React.FC<AITerminalProps> = ({ projects, messages, setM
           <div className="absolute -top-1 -right-1 w-4 h-4 bg-secondary rounded-full border-2 border-background-dark z-20 animate-pulse"></div>
         )}
       </button>
-    </div>
+    </motion.div>
   );
 };

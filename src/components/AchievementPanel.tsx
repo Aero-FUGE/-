@@ -1,19 +1,9 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, Trophy, Award, Zap, Calendar, Star, Link, Search, BookOpen, Cpu, FastForward, TrendingUp, Clock, Activity, Target, Layers, BarChart, Hourglass, Shield, Crown, Map, Swords, Flame, Infinity, Gem, Hammer, Sparkles, Sun, History, Globe, Ghost, HardDrive, Key, Command, Sunrise, Moon, User, Heart, Wand2 } from 'lucide-react';
+import { X, Trophy } from 'lucide-react';
 import { Achievement } from '../types';
 import { cn } from '../lib/utils';
-
-const IconMap: Record<string, any> = {
-  'link': Link, 'search': Search, 'book-open': BookOpen, 'cpu': Cpu,
-  'zap': Zap, 'fast-forward': FastForward, 'trending-up': TrendingUp, 'clock': Clock, 'activity': Activity,
-  'target': Target, 'layers': Layers, 'bar-chart': BarChart, 'hourglass': Hourglass, 'shield': Shield,
-  'crown': Crown, 'map': Map, 'swords': Swords, 'flame': Flame, 'infinity': Infinity,
-  'gem': Gem, 'hammer': Hammer, 'sparkles': Sparkles, 'sun': Sun, 'history': History,
-  'globe': Globe, 'ghost': Ghost, 'hard-drive': HardDrive, 'key': Key, 'command': Command,
-  'sunrise': Sunrise, 'moon': Moon, 'user': User, 'heart': Heart, 'wand-2': Wand2,
-  'award': Award, 'calendar': Calendar, 'star': Star
-};
+import { IconMap } from '../constants/icons';
 
 interface AchievementPanelProps {
   isOpen: boolean;
@@ -66,36 +56,42 @@ export const AchievementPanel: React.FC<AchievementPanelProps> = ({
                         <div
                           key={achievement.id}
                           className={cn(
-                            "relative p-4 rounded-xl border transition-all duration-500",
+                            "relative p-4 rounded-xl border transition-all duration-500 w-full flex flex-col gap-3 overflow-hidden",
                             isUnlocked 
                               ? "bg-primary/10 border-primary/30 shadow-[0_0_15px_rgba(13,242,242,0.1)]" 
                               : "bg-white/5 border-white/5 opacity-40 grayscale"
                           )}
                         >
-                          <div className="flex gap-4">
+                          <div className="flex gap-4 items-start min-w-0">
                             <div className={cn(
                               "size-10 rounded-lg flex items-center justify-center shrink-0",
                               isUnlocked ? "bg-primary/20 text-primary" : "bg-white/10 text-white/20"
                             )}>
                               <Icon size={20} />
                             </div>
-                            <div className="flex-1">
+                            <div className="flex-1 min-w-0">
                               <h3 className={cn(
-                                "font-bold text-xs uppercase tracking-wider",
+                                "font-bold text-xs uppercase tracking-wider break-words whitespace-normal leading-tight",
                                 isUnlocked ? "text-white" : "text-white/40"
                               )}>
                                 {achievement.title}
                               </h3>
-                              <p className="text-[10px] text-white/40 mt-1 leading-relaxed">
+                              <p className="text-[10px] text-white/40 mt-1 leading-relaxed break-words whitespace-normal">
                                 {achievement.description}
                               </p>
-                              {isUnlocked && (
-                                <div className="mt-2 text-[8px] font-mono text-primary/60 uppercase tracking-widest">
-                                  已激活: {new Date(achievement.unlockedAt!).toLocaleDateString()}
-                                </div>
-                              )}
+                            </div>
+                            <div className="shrink-0 flex flex-col items-end gap-1">
+                              <div className="px-1.5 py-0.5 rounded bg-primary/20 border border-primary/30 text-[8px] font-bold text-primary uppercase tracking-tighter">
+                                +{achievement.xpReward} XP
+                              </div>
                             </div>
                           </div>
+                          {isUnlocked && (
+                            <div className="pt-2 border-t border-white/5 text-[8px] font-mono text-primary/60 uppercase tracking-widest flex justify-between items-center">
+                              <span className="truncate mr-2">已激活系统链路</span>
+                              <span className="shrink-0">{new Date(achievement.unlockedAt!).toLocaleDateString()}</span>
+                            </div>
+                          )}
                         </div>
                       );
                     })}

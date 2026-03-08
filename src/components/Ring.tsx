@@ -5,6 +5,8 @@ import { cn } from '../lib/utils';
 
 interface RingProps {
   project: Project;
+  x: number;
+  y: number;
   isSelected: boolean;
   onClick: () => void;
   onDoubleClick: () => void;
@@ -12,7 +14,7 @@ interface RingProps {
   onDragStart?: () => void;
 }
 
-export const Ring: React.FC<RingProps> = ({ project, isSelected, onClick, onDoubleClick, onDrag, onDragStart }) => {
+export const Ring: React.FC<RingProps> = ({ project, x, y, isSelected, onClick, onDoubleClick, onDrag, onDragStart }) => {
   const radius = 60;
   const strokeWidth = 8;
   const center = radius + strokeWidth;
@@ -65,12 +67,18 @@ export const Ring: React.FC<RingProps> = ({ project, isSelected, onClick, onDoub
         onDragStart?.();
       }}
       onDragEnd={(_, info) => {
-        onDrag(project.id, project.x + info.offset.x, project.y + info.offset.y);
+        // The drag is relative to the current position (x, y)
+        onDrag(project.id, x + info.offset.x, y + info.offset.y);
       }}
       initial={false}
-      animate={{ x: project.x, y: project.y, scale: project.scale }}
+      animate={{ x, y, scale: project.scale }}
+      transition={{ 
+        x: { duration: 0 }, 
+        y: { duration: 0 },
+        scale: { type: 'spring', stiffness: 300, damping: 30 }
+      }}
       className={cn(
-        "absolute cursor-grab active:cursor-grabbing transition-shadow",
+        "absolute cursor-grab active:cursor-grabbing transition-shadow ring-component",
         isSelected && "z-10"
       )}
       style={{ width: center * 2, height: center * 2 }}
@@ -197,7 +205,10 @@ export const Ring: React.FC<RingProps> = ({ project, isSelected, onClick, onDoub
       </svg>
 
       {/* Label */}
-      <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+      <motion.div 
+        animate={{ scale: 1 / project.scale }}
+        className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none"
+      >
         <span className="text-[10px] uppercase tracking-widest text-white/40 font-mono">
           {progressPercent}%
         </span>
@@ -205,7 +216,7 @@ export const Ring: React.FC<RingProps> = ({ project, isSelected, onClick, onDoub
           {project.name}
         </span>
         <span className="text-[8px] text-white/20 uppercase mt-1">双击进入系统</span>
-      </div>
+      </motion.div>
       {/* Completion Glow - Very subtle constant glow if completed */}
       {isComplete && (
         <motion.div

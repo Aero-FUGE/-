@@ -18,6 +18,9 @@ export interface Task {
   notes?: string;
   completedAt?: number; // timestamp
   order: number;
+  timerStartTime?: number; // timestamp when timer started/resumed
+  timerAccumulatedTime?: number; // in seconds
+  isTimerRunning?: boolean;
 }
 
 export interface Achievement {
@@ -27,14 +30,16 @@ export interface Achievement {
   icon: string;
   category: '觉醒' | '执行' | '掌控' | '统治' | '传奇' | '神话' | '隐藏';
   unlockedAt?: number;
+  xpReward: number;
 }
 
 export interface SystemLogEntry {
   id: string;
   timestamp: number;
-  type: 'TASK_COMPLETED' | 'TASK_PROGRESS' | 'RING_CREATED' | 'RING_COMPLETED' | 'SYSTEM_AWAKENED' | 'DOMAIN_CREATED' | 'DOMAIN_PROGRESS';
+  type: 'TASK_COMPLETED' | 'TASK_PROGRESS' | 'RING_CREATED' | 'RING_COMPLETED' | 'SYSTEM_AWAKENED' | 'DOMAIN_CREATED' | 'DOMAIN_PROGRESS' | 'LEVEL_UP' | 'XP_GAIN';
   eventName: string;
   targetName: string;
+  xpAmount?: number;
 }
 
 export interface UserStats {
@@ -49,6 +54,8 @@ export interface UserStats {
   totalRingsCreated: number;
   totalTasksCreated: number;
   lastActiveDate: string; // YYYY-MM-DD
+  xp: number;
+  level: number;
 }
 
 export interface Domain {

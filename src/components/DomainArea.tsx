@@ -1,25 +1,38 @@
 import React, { useState } from 'react';
 import { motion } from 'motion/react';
-import { Domain } from '../types';
+import { Domain, Project } from '../types';
 import { cn } from '../lib/utils';
 import { Box, Plus, Edit2, Check, Maximize2 } from 'lucide-react';
+import { Ring } from './Ring';
 
 interface DomainAreaProps {
   domain: Domain;
+  projects: Project[];
+  selectedProjectId: string | null;
   isProjectDragging: boolean;
   onAddProject: (domainId: string) => void;
   onDrag: (id: string, x: number, y: number) => void;
   onResize: (id: string, width: number, height: number) => void;
   onUpdate: (id: string, updates: Partial<Domain>) => void;
+  onRingClick: (id: string) => void;
+  onRingDoubleClick: (id: string) => void;
+  onRingDrag: (id: string, x: number, y: number) => void;
+  onRingDragStart: (id: string) => void;
 }
 
 export const DomainArea: React.FC<DomainAreaProps> = ({ 
   domain, 
+  projects,
+  selectedProjectId,
   isProjectDragging,
   onAddProject, 
   onDrag,
   onResize,
-  onUpdate
+  onUpdate,
+  onRingClick,
+  onRingDoubleClick,
+  onRingDrag,
+  onRingDragStart
 }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [tempName, setTempName] = useState(domain.name);
@@ -45,8 +58,14 @@ export const DomainArea: React.FC<DomainAreaProps> = ({
         borderColor: isProjectDragging ? `${domain.color}80` : `${domain.color}30`,
         backgroundColor: isProjectDragging ? `${domain.color}10` : `${domain.color}05`,
       }}
+      transition={{
+        x: { duration: 0 },
+        y: { duration: 0 },
+        width: { type: 'spring', stiffness: 300, damping: 30 },
+        height: { type: 'spring', stiffness: 300, damping: 30 },
+      }}
       className={cn(
-        "absolute border-2 border-dashed rounded-[40px] cursor-grab active:cursor-grabbing group",
+        "absolute border-2 border-dashed rounded-[40px] cursor-grab active:cursor-grabbing group domain-area",
       )}
     >
       {/* Domain Label */}
@@ -90,6 +109,33 @@ export const DomainArea: React.FC<DomainAreaProps> = ({
             DOMAIN IDENTIFIED
           </span>
         </div>
+      </div>
+
+      {/* Bound Projects */}
+      <div className="absolute inset-0 pointer-events-none">
+        {projects.map((project) => (
+          <div 
+            key={project.id}
+            className="absolute pointer-events-auto"
+            style={{ 
+              left: project.x, 
+              top: project.y,
+              // project.x and project.y are now relative to the domain
+            }}
+            onMouseDown={(e) => e.stopPropagation()} // Prevent dragging domain when dragging ring
+          >
+            <Ring
+              project={project}
+              x={0}
+              y={0}
+              isSelected={selectedProjectId === project.id}
+              onClick={() => onRingClick(project.id)}
+              onDoubleClick={() => onRingDoubleClick(project.id)}
+              onDrag={(id, x, y) => onRingDrag(id, x + domain.x, y + domain.y)}
+              onDragStart={() => onRingDragStart(project.id)}
+            />
+          </div>
+        ))}
       </div>
 
       {/* Resize Handle */}
