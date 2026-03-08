@@ -171,7 +171,7 @@ export const SidePanel: React.FC<SidePanelProps> = ({
       animate={{ x: 0 }}
       exit={{ x: '100%' }}
       transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-      className="fixed top-0 right-0 h-full w-full max-w-md bg-background-dark/60 backdrop-blur-2xl border-l border-primary/20 z-50 flex flex-col shadow-2xl"
+      className="fixed top-0 right-0 h-[100dvh] w-full max-w-md bg-background-dark/60 backdrop-blur-2xl border-l border-primary/20 z-50 flex flex-col shadow-2xl"
     >
       {/* Header */}
       <div className="p-6 border-b border-primary/20 flex items-center justify-between bg-primary/5">
@@ -282,26 +282,26 @@ export const SidePanel: React.FC<SidePanelProps> = ({
                             {task.isTimerRunning ? (
                               <button 
                                 onClick={() => pauseTimer(task.id)}
-                                className="p-1 text-yellow-400 hover:bg-yellow-400/10 rounded transition-colors"
+                                className="p-2 text-yellow-400 hover:bg-yellow-400/10 rounded transition-colors"
                                 title="暂停计时"
                               >
-                                <Pause size={12} fill="currentColor" />
+                                <Pause size={14} fill="currentColor" />
                               </button>
                             ) : (
                               <button 
                                 onClick={() => startTimer(task.id)}
-                                className="p-1 text-green-400 hover:bg-green-400/10 rounded transition-colors"
+                                className="p-2 text-green-400 hover:bg-green-400/10 rounded transition-colors"
                                 title="开始计时"
                               >
-                                <Play size={12} fill="currentColor" />
+                                <Play size={14} fill="currentColor" />
                               </button>
                             )}
                             <button 
                               onClick={() => endTimer(task.id)}
-                              className="p-1 text-red-400 hover:bg-red-400/10 rounded transition-colors"
+                              className="p-2 text-red-400 hover:bg-red-400/10 rounded transition-colors"
                               title="结束并完成"
                             >
-                              <Square size={12} fill="currentColor" />
+                              <Square size={14} fill="currentColor" />
                             </button>
                           </>
                         )}

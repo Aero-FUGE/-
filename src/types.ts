@@ -56,6 +56,7 @@ export interface UserStats {
   lastActiveDate: string; // YYYY-MM-DD
   xp: number;
   level: number;
+  soundEnabled: boolean;
 }
 
 export interface Domain {

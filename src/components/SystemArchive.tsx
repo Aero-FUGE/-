@@ -60,7 +60,7 @@ export const SystemArchive: React.FC<SystemArchiveProps> = ({
           initial={{ opacity: 0, x: 100 }}
           animate={{ opacity: 1, x: 0 }}
           exit={{ opacity: 0, x: 100 }}
-          className="fixed top-0 right-0 h-full w-full max-w-2xl bg-background-dark/95 backdrop-blur-3xl border-l border-primary/20 z-[80] flex flex-col shadow-2xl"
+          className="fixed top-0 right-0 h-[100dvh] w-full max-w-2xl bg-background-dark/95 backdrop-blur-3xl border-l border-primary/20 z-[80] flex flex-col shadow-2xl"
         >
           {/* Header */}
           <div className="p-6 border-b border-primary/20 flex items-center justify-between bg-primary/5">

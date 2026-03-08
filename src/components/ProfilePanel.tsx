@@ -12,6 +12,7 @@ interface ProfilePanelProps {
   stats: UserStats;
   achievements: Achievement[];
   onUpdateNickname: (name: string) => void;
+  onToggleSound: (enabled: boolean) => void;
 }
 
 export const ProfilePanel: React.FC<ProfilePanelProps> = ({
@@ -20,6 +21,7 @@ export const ProfilePanel: React.FC<ProfilePanelProps> = ({
   stats,
   achievements,
   onUpdateNickname,
+  onToggleSound,
 }) => {
   const [isEditing, setIsEditing] = React.useState(false);
   const [tempNickname, setTempNickname] = React.useState(stats.nickname);
@@ -45,7 +47,7 @@ export const ProfilePanel: React.FC<ProfilePanelProps> = ({
           initial={{ opacity: 0, x: -100 }}
           animate={{ opacity: 1, x: 0 }}
           exit={{ opacity: 0, x: -100 }}
-          className="fixed top-0 left-0 h-full w-full max-w-md bg-background-dark/95 backdrop-blur-3xl border-r border-primary/20 z-[80] flex flex-col shadow-2xl"
+          className="fixed top-0 left-0 h-[100dvh] w-full max-w-md bg-background-dark/95 backdrop-blur-3xl border-r border-primary/20 z-[80] flex flex-col shadow-2xl"
         >
           {/* Header */}
           <div className="p-6 border-b border-primary/20 flex items-center justify-between bg-primary/5">
@@ -160,6 +162,32 @@ export const ProfilePanel: React.FC<ProfilePanelProps> = ({
                   <span className="text-[10px] uppercase tracking-widest">连续天数</span>
                 </div>
                 <div className="text-2xl font-bold text-primary">{stats.streakDays}d</div>
+              </div>
+            </div>
+
+            {/* System Settings */}
+            <div className="space-y-4">
+              <h4 className="text-[10px] uppercase tracking-widest text-white/40 font-bold flex items-center gap-2">
+                <Shield size={12} />
+                系统设置 SYSTEM SETTINGS
+              </h4>
+              <div className="bg-white/5 border border-white/10 rounded-xl p-4 flex items-center justify-between">
+                <div className="flex flex-col">
+                  <span className="text-xs font-bold text-white">按钮交互音效</span>
+                  <span className="text-[8px] text-white/40 uppercase tracking-tighter">UI CLICK FEEDBACK</span>
+                </div>
+                <button 
+                  onClick={() => onToggleSound(!stats.soundEnabled)}
+                  className={cn(
+                    "w-12 h-6 rounded-full transition-colors relative",
+                    stats.soundEnabled ? "bg-primary" : "bg-white/10"
+                  )}
+                >
+                  <motion.div 
+                    animate={{ x: stats.soundEnabled ? 24 : 4 }}
+                    className="absolute top-1 left-0 w-4 h-4 bg-background-dark rounded-full"
+                  />
+                </button>
               </div>
             </div>
 

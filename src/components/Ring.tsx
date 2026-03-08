@@ -87,7 +87,11 @@ export const Ring: React.FC<RingProps> = ({ project, x, y, isSelected, onClick, 
       }}
       onClick={(e) => {
         e.stopPropagation();
-        onClick(); // This will select the ring
+        if (isSelected) {
+          onDoubleClick(); // On mobile/touch, second click opens
+        } else {
+          onClick(); // First click selects
+        }
       }}
       onDoubleClick={(e) => {
         e.stopPropagation();
@@ -224,7 +228,7 @@ export const Ring: React.FC<RingProps> = ({ project, x, y, isSelected, onClick, 
         <span className="text-xs font-bold text-white text-center px-2 truncate max-w-full">
           {project.name}
         </span>
-        <span className="text-[8px] text-white/20 uppercase mt-1">双击进入系统</span>
+        <span className="text-[8px] text-white/20 uppercase mt-1">点击进入系统</span>
       </motion.div>
       {/* Completion Glow - Very subtle constant glow if completed */}
       {isComplete && (

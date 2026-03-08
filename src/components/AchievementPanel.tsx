@@ -23,7 +23,7 @@ export const AchievementPanel: React.FC<AchievementPanelProps> = ({
           initial={{ opacity: 0, x: -100 }}
           animate={{ opacity: 1, x: 0 }}
           exit={{ opacity: 0, x: -100 }}
-          className="fixed top-0 left-0 h-full w-full max-w-md bg-background-dark/95 backdrop-blur-2xl border-r border-primary/20 z-[70] flex flex-col shadow-2xl"
+          className="fixed top-0 left-0 h-[100dvh] w-full max-w-md bg-background-dark/95 backdrop-blur-2xl border-r border-primary/20 z-[70] flex flex-col shadow-2xl"
         >
           <div className="p-6 border-b border-primary/20 flex items-center justify-between bg-primary/5">
             <div className="flex items-center gap-3">

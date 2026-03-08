@@ -1,11 +1,12 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
-import { motion } from 'motion/react';
+import { motion, AnimatePresence } from 'motion/react';
 import { Plus, Minus, RotateCcw, Target, Layers, BarChart3, User as UserIcon, Trophy, Maximize2, Activity, FileText, Box } from 'lucide-react';
 import { AchievementPanel } from './components/AchievementPanel';
 import { SystemArchive } from './components/SystemArchive';
 import { SystemLog } from './components/SystemLog';
 import { ProfilePanel } from './components/ProfilePanel';
 import { DomainArea } from './components/DomainArea';
+import { LoadingScreen } from './components/LoadingScreen';
 import { cn } from './lib/utils';
 import { ALL_TITLES } from './constants/titles';
 import { getLevelFromXP, getNextLevelXP } from './constants/levels';
@@ -91,6 +92,7 @@ export default function App() {
     lastActiveDate: new Date().toISOString().split('T')[0],
     xp: 0,
     level: 1,
+    soundEnabled: true,
   });
 
   // 2. Map Engine
@@ -116,6 +118,16 @@ export default function App() {
   const [isArchiveOpen, setIsArchiveOpen] = useState(false);
   const [isLogOpen, setIsLogOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+
+  // Auto-hide loading screen after mount
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setIsLoading(false);
+    }, 3500); // Slightly longer than LoadingScreen's internal 3s to ensure it finishes its animation
+    
+    return () => clearTimeout(timer);
+  }, []);
 
   // 4. Task Engine
   const { updateProject } = useTaskEngine(
@@ -141,7 +153,31 @@ export default function App() {
   useEffect(() => {
     audioRef.current = new Audio('https://assets.mixkit.co/active_storage/sfx/2013/2013-preview.mp3');
     addLogEntry('SYSTEM_AWAKENED', '系统提示：神经链路已建立', '系统觉醒阶段：初始化完成');
-  }, []);
+
+    // Global click sound handler
+    const playClickSound = (e: MouseEvent) => {
+      if (!stats.soundEnabled) return;
+      
+      const target = e.target as HTMLElement;
+      const isInteractive = 
+        target.tagName === 'BUTTON' || 
+        target.tagName === 'A' || 
+        target.closest('button') || 
+        target.closest('a') ||
+        window.getComputedStyle(target).cursor === 'pointer';
+
+      if (isInteractive && audioRef.current) {
+        audioRef.current.currentTime = 0;
+        audioRef.current.volume = 0.2;
+        audioRef.current.play().catch(() => {
+          // Ignore autoplay restrictions
+        });
+      }
+    };
+
+    document.addEventListener('click', playClickSound);
+    return () => document.removeEventListener('click', playClickSound);
+  }, [stats.soundEnabled, addLogEntry]);
 
   const addNewProject = (domainId?: string) => {
     const domain = domains.find(d => d.id === domainId);
@@ -208,9 +244,28 @@ export default function App() {
   const xpProgressPercent = totalInLevel > 0 ? Math.min(100, (progressInLevel / totalInLevel) * 100) : 100;
 
   return (
-    <div className="h-screen w-screen bg-background-dark overflow-hidden flex flex-col font-display selection:bg-primary selection:text-background-dark">
-      {/* HUD Header */}
-      <header className="h-16 flex items-center justify-between px-6 border-b border-primary/20 bg-background-dark/80 backdrop-blur-md z-40 hud-panel">
+    <div className="h-[100dvh] w-screen bg-background-dark overflow-hidden flex flex-col font-display selection:bg-primary selection:text-background-dark">
+      <AnimatePresence mode="wait">
+        {isLoading ? (
+          <motion.div
+            key="loading"
+            initial={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.8, ease: "easeInOut" }}
+            className="fixed inset-0 z-[9999]"
+          >
+            <LoadingScreen onLoadingComplete={() => setIsLoading(false)} />
+          </motion.div>
+        ) : (
+          <motion.div
+            key="main"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 1.2, ease: "easeOut" }}
+            className="h-full w-full flex flex-col relative"
+          >
+            {/* HUD Header */}
+            <header className="h-16 flex items-center justify-between px-6 border-b border-primary/20 bg-background-dark/80 backdrop-blur-md z-40 hud-panel">
         <div className="flex items-center gap-4">
           <div className="relative cursor-pointer group" onClick={() => setIsProfileOpen(true)}>
             <div className="text-primary flex items-center justify-center p-2 border border-primary/30 rounded bg-primary/5 group-hover:bg-primary/20 transition-colors">
@@ -541,10 +596,14 @@ export default function App() {
         stats={stats}
         achievements={achievements}
         onUpdateNickname={(nickname) => setStats(prev => ({ ...prev, nickname }))}
+        onToggleSound={(enabled) => setStats(prev => ({ ...prev, soundEnabled: enabled }))}
       />
 
       {/* Ambient Overlay */}
       <div className="fixed inset-0 pointer-events-none border-[20px] border-primary/5 z-50" />
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

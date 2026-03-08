@@ -9,8 +9,21 @@
 }
 
 @layer base {
+  html, body, #root {
+    height: 100%;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    position: fixed;
+    touch-action: none; /* Prevent browser pull-to-refresh and other touch behaviors */
+  }
+  
   body {
     @apply bg-background-dark text-slate-100 font-display;
+    height: 100dvh;
+    width: 100vw;
+    -webkit-overflow-scrolling: touch;
   }
 }
 
