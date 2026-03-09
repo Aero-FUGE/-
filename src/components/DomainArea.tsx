@@ -2,8 +2,9 @@ import React, { useState } from 'react';
 import { motion } from 'motion/react';
 import { Domain, Project } from '../types';
 import { cn } from '../lib/utils';
-import { Box, Plus, Edit2, Check, Maximize2 } from 'lucide-react';
+import { Box, Plus, Edit2, Check, Maximize2, X, Activity } from 'lucide-react';
 import { Ring } from './Ring';
+import { AnimatePresence } from 'motion/react';
 
 interface DomainAreaProps {
   domain: Domain;
@@ -18,6 +19,7 @@ interface DomainAreaProps {
   onRingDoubleClick: (id: string) => void;
   onRingDrag: (id: string, x: number, y: number) => void;
   onRingDragStart: (id: string) => void;
+  onDeleteDomain: (id: string) => void;
 }
 
 export const DomainArea: React.FC<DomainAreaProps> = ({ 
@@ -32,10 +34,12 @@ export const DomainArea: React.FC<DomainAreaProps> = ({
   onRingClick,
   onRingDoubleClick,
   onRingDrag,
-  onRingDragStart
+  onRingDragStart,
+  onDeleteDomain
 }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [tempName, setTempName] = useState(domain.name);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   const handleSaveName = () => {
     onUpdate(domain.id, { name: tempName });
@@ -103,6 +107,13 @@ export const DomainArea: React.FC<DomainAreaProps> = ({
               >
                 <Edit2 size={12} />
               </button>
+              <button 
+                onClick={() => setShowDeleteConfirm(true)}
+                className="opacity-0 group-hover/label:opacity-100 text-white/40 hover:text-red-500 transition-opacity"
+                title="删除领域"
+              >
+                <X size={12} />
+              </button>
             </div>
           )}
           <span className="text-[8px] text-white/40 uppercase tracking-tighter">
@@ -110,6 +121,46 @@ export const DomainArea: React.FC<DomainAreaProps> = ({
           </span>
         </div>
       </div>
+
+      {/* Delete Confirmation Overlay */}
+      <AnimatePresence>
+        {showDeleteConfirm && (
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.9 }}
+            className="absolute inset-0 z-50 flex items-center justify-center bg-background-dark/80 backdrop-blur-sm rounded-[40px] border-2 border-red-500/30"
+            onMouseDown={(e) => e.stopPropagation()}
+          >
+            <div className="flex flex-col items-center gap-4 p-6 text-center">
+              <div className="w-12 h-12 rounded-full bg-red-500/20 flex items-center justify-center text-red-500 mb-2">
+                <Activity size={24} />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-white uppercase tracking-widest mb-1">删除领域？</h3>
+                <p className="text-[10px] text-white/60 uppercase tracking-tighter">此操作将永久移除领域及其绑定的所有闭环系统。</p>
+              </div>
+              <div className="flex gap-3 mt-2">
+                <button 
+                  onClick={() => setShowDeleteConfirm(false)}
+                  className="px-4 py-2 rounded bg-white/5 border border-white/10 text-[10px] text-white/60 uppercase tracking-widest hover:bg-white/10 transition-colors"
+                >
+                  取消
+                </button>
+                <button 
+                  onClick={() => {
+                    onDeleteDomain(domain.id);
+                    setShowDeleteConfirm(false);
+                  }}
+                  className="px-4 py-2 rounded bg-red-500/20 border border-red-500/40 text-[10px] text-red-500 uppercase tracking-widest hover:bg-red-500/40 transition-colors"
+                >
+                  确认删除
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Bound Projects */}
       <div className="absolute inset-0 pointer-events-none">

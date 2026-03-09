@@ -119,6 +119,7 @@ export const useProgressEngine = (initialStats: UserStats) => {
     setStats,
     achievements,
     systemLogs,
+    setSystemLogs,
     addLogEntry,
     gainXP,
     checkAchievements,

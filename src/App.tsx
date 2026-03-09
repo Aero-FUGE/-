@@ -13,54 +13,24 @@ import { getLevelFromXP, getNextLevelXP } from './constants/levels';
 import { ChatMessage, Project, TaskStatus, Achievement, UserStats, SystemLogEntry, Domain } from './types';
 import { Ring } from './components/Ring';
 import { SidePanel } from './components/SidePanel';
+import { AITerminal } from './components/AITerminal';
 
 // Import Engines
 import { useMapEngine } from './hooks/useMapEngine';
 import { useLoopEngine } from './hooks/useLoopEngine';
 import { useTaskEngine } from './hooks/useTaskEngine';
 import { useProgressEngine } from './hooks/useProgressEngine';
-import { db } from './lib/firebase';
-import { ref, onValue, set } from 'firebase/database';
-const INITIAL_DOMAINS: Domain[] = [
 
-const INITIAL_DOMAINS: Domain[] = [
-  { id: 'd1', name: '音乐创作', color: '#0df2f2', x: 200, y: 100, width: 400, height: 400 },
-  { id: 'd2', name: '粉丝运营', color: '#ff00ff', x: 650, y: 350, width: 400, height: 400 },
-];
+import { syncService } from './services/syncService';
 
-const INITIAL_PROJECTS: Project[] = [
-  {
-    id: '1',
-    name: '新歌制作',
-    x: 400,
-    y: 200,
-    scale: 1,
-    color: '#0df2f2',
-    domainId: 'd1',
-    tasks: [
-      { id: 't1', name: '编曲第一段', estimatedTime: 120, actualTime: 0, status: TaskStatus.DONE, order: 0 },
-      { id: 't2', name: '人声录制', estimatedTime: 240, actualTime: 0, status: TaskStatus.IN_PROGRESS, order: 1 },
-      { id: 't3', name: '后期混音', estimatedTime: 180, actualTime: 0, status: TaskStatus.TODO, order: 2 },
-    ],
-  },
-  {
-    id: '2',
-    name: '实体专辑设计',
-    x: 750,
-    y: 450,
-    scale: 1.2,
-    color: '#ff00ff',
-    domainId: 'd2',
-    tasks: [
-      { id: 't4', name: '封面插画', estimatedTime: 480, actualTime: 0, status: TaskStatus.TODO, order: 0 },
-      { id: 't5', name: '排版设计', estimatedTime: 120, actualTime: 0, status: TaskStatus.TODO, order: 1 },
-    ],
-  },
-];
+const INITIAL_DOMAINS: Domain[] = [];
+const INITIAL_PROJECTS: Project[] = [];
 
 export default function App() {
   const mapRef = useRef<HTMLDivElement>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  const completeAudioRef = useRef<HTMLAudioElement | null>(null);
 
   const [sessionStartTime] = useState(Date.now());
   const [uptime, setUptime] = useState('00:00:00');
@@ -78,7 +48,7 @@ export default function App() {
 
   // 1. Progress Engine
   const { 
-    stats, setStats, achievements, systemLogs, 
+    stats, setStats, achievements, systemLogs, setSystemLogs,
     addLogEntry, gainXP, checkAchievements, addTimeSpent 
   } = useProgressEngine({
     nickname: '系统绑定者',
@@ -109,29 +79,6 @@ export default function App() {
     projects, setProjects, draggingProjectId, setDraggingProjectId, 
     scaleRing, deleteProject, dragRing 
   } = useLoopEngine(INITIAL_PROJECTS);
-// ============================
-// Firebase 同步系统
-// ============================
-
-// 从 Firebase 读取
-useEffect(() => {
-  const projectsRef = ref(db, "projects");
-
-  const unsubscribe = onValue(projectsRef, (snapshot) => {
-    const data = snapshot.val();
-    if (data) {
-      setProjects(data);
-    }
-  });
-
-  return () => unsubscribe();
-}, []);
-
-// 写入 Firebase
-useEffect(() => {
-  const projectsRef = ref(db, "projects");
-  set(projectsRef, projects);
-}, [projects]);
 
   const [domains, setDomains] = useState<Domain[]>(INITIAL_DOMAINS);
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
@@ -176,8 +123,38 @@ useEffect(() => {
   );
 
   useEffect(() => {
-    audioRef.current = new Audio('https://assets.mixkit.co/active_storage/sfx/2013/2013-preview.mp3');
+    // Shorter click sound
+    audioRef.current = new Audio('https://assets.mixkit.co/active_storage/sfx/2571/2571-preview.mp3');
+    completeAudioRef.current = new Audio('https://assets.mixkit.co/active_storage/sfx/2013/2013-preview.mp3');
     addLogEntry('SYSTEM_AWAKENED', '系统提示：神经链路已建立', '系统觉醒阶段：初始化完成');
+
+    // Supabase Initial Load with LocalStorage Fallback
+    const loadData = async () => {
+      try {
+        const data = await syncService.fetchInitialData();
+        if (data && (data.domains.length > 0 || data.projects.length > 0)) {
+          setDomains(data.domains);
+          setProjects(data.projects);
+          setSystemLogs(data.logs);
+          if (data.stats) setStats(data.stats);
+          return;
+        }
+      } catch (e) {
+        console.error('Supabase load failed, falling back to local storage');
+      }
+
+      // Fallback to localStorage
+      const localDomains = localStorage.getItem('system_domains');
+      const localProjects = localStorage.getItem('system_projects');
+      const localStats = localStorage.getItem('system_stats');
+      const localLogs = localStorage.getItem('system_logs');
+      
+      if (localDomains) setDomains(JSON.parse(localDomains));
+      if (localProjects) setProjects(JSON.parse(localProjects));
+      if (localStats) setStats(JSON.parse(localStats));
+      if (localLogs) setSystemLogs(JSON.parse(localLogs));
+    };
+    loadData();
 
     // Global click sound handler
     const playClickSound = (e: MouseEvent) => {
@@ -193,16 +170,62 @@ useEffect(() => {
 
       if (isInteractive && audioRef.current) {
         audioRef.current.currentTime = 0;
-        audioRef.current.volume = 0.2;
-        audioRef.current.play().catch(() => {
-          // Ignore autoplay restrictions
-        });
+        audioRef.current.volume = 0.1; 
+        audioRef.current.play().catch(() => {});
       }
     };
 
+    const handleOnline = () => {
+      // Sync local data to Supabase when back online
+      const localDomains = localStorage.getItem('system_domains');
+      const localProjects = localStorage.getItem('system_projects');
+      const localStats = localStorage.getItem('system_stats');
+      
+      if (localDomains) JSON.parse(localDomains).forEach((d: any) => syncService.upsertDomain(d));
+      if (localProjects) JSON.parse(localProjects).forEach((p: any) => syncService.upsertProject(p));
+      if (localStats) syncService.upsertStats(JSON.parse(localStats));
+    };
+
     document.addEventListener('click', playClickSound);
-    return () => document.removeEventListener('click', playClickSound);
-  }, [stats.soundEnabled, addLogEntry]);
+    window.addEventListener('online', handleOnline);
+    return () => {
+      document.removeEventListener('click', playClickSound);
+      window.removeEventListener('online', handleOnline);
+    };
+  }, [stats.soundEnabled, addLogEntry, setDomains, setProjects, setSystemLogs, setStats]);
+
+  // Sync to LocalStorage and Supabase
+  useEffect(() => {
+    if (isLoading) return;
+    localStorage.setItem('system_domains', JSON.stringify(domains));
+    domains.forEach(d => syncService.upsertDomain(d));
+  }, [domains, isLoading]);
+
+  useEffect(() => {
+    if (isLoading) return;
+    localStorage.setItem('system_projects', JSON.stringify(projects));
+    projects.forEach(p => syncService.upsertProject(p));
+    
+    // Check for completion sound
+    const completedCount = projects.filter(p => p.tasks.length > 0 && p.tasks.every(t => t.status === TaskStatus.DONE)).length;
+    if (completedCount > stats.totalRingsCompleted && completeAudioRef.current && stats.soundEnabled) {
+      completeAudioRef.current.currentTime = 0;
+      completeAudioRef.current.volume = 0.3;
+      completeAudioRef.current.play().catch(() => {});
+    }
+  }, [projects, isLoading, stats.totalRingsCompleted, stats.soundEnabled]);
+
+  useEffect(() => {
+    if (isLoading) return;
+    localStorage.setItem('system_stats', JSON.stringify(stats));
+    syncService.upsertStats(stats);
+  }, [stats, isLoading]);
+
+  useEffect(() => {
+    if (isLoading || systemLogs.length === 0) return;
+    localStorage.setItem('system_logs', JSON.stringify(systemLogs));
+    syncService.upsertLog(systemLogs[0]);
+  }, [systemLogs, isLoading]);
 
   const addNewProject = (domainId?: string) => {
     const domain = domains.find(d => d.id === domainId);
@@ -260,6 +283,18 @@ useEffect(() => {
       return d;
     }));
   }, []);
+
+  const handleDeleteDomain = (id: string) => {
+    const domain = domains.find(d => d.id === id);
+    if (!domain) return;
+
+    setDomains(prev => prev.filter(d => d.id !== id));
+    // Unbind projects
+    setProjects(prev => prev.map(p => p.domainId === id ? { ...p, domainId: undefined } : p));
+    
+    syncService.deleteDomain(id);
+    addLogEntry('DOMAIN_DELETED', '系统提示：领域已被移除', domain.name);
+  };
 
   const levelInfo = getLevelFromXP(stats.xp);
   const nextLevelXP = getNextLevelXP(levelInfo.level);
@@ -412,6 +447,7 @@ useEffect(() => {
               onRingDoubleClick={setEditingProjectId}
               onRingDrag={(id, x, y) => dragRing(id, x, y, domains, (m, t) => addLogEntry('DOMAIN_PROGRESS', m, t), gainXP)}
               onRingDragStart={setDraggingProjectId}
+              onDeleteDomain={handleDeleteDomain}
             />
           ))}
 
@@ -513,7 +549,16 @@ useEffect(() => {
         achievements={achievements}
       />
 
-     
+      {/* AI Terminal */}
+      <AITerminal 
+        projects={projects}
+        messages={messages}
+        setMessages={setMessages}
+        onUpdateProjects={(newProjects) => {
+          setProjects(newProjects);
+          checkAchievements(newProjects, stats);
+        }}
+      />
 
       {/* Bottom Nav */}
       <nav className="h-16 border-t border-primary/20 bg-background-dark/80 backdrop-blur-md px-6 flex items-center justify-center gap-12 z-40">

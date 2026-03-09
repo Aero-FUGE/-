@@ -87,11 +87,7 @@ export const Ring: React.FC<RingProps> = ({ project, x, y, isSelected, onClick, 
       }}
       onClick={(e) => {
         e.stopPropagation();
-        if (isSelected) {
-          onDoubleClick(); // On mobile/touch, second click opens
-        } else {
-          onClick(); // First click selects
-        }
+        onClick(); // Always just select
       }}
       onDoubleClick={(e) => {
         e.stopPropagation();
