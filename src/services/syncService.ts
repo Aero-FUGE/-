@@ -10,14 +10,12 @@ export const syncService = {
         { data: domains },
         { data: projects },
         { data: tasks },
-        { data: logs },
-        { data: stats }
+        { data: logs }
       ] = await Promise.all([
         supabase.from('domains').select('*').eq('user_id', USER_ID),
         supabase.from('projects').select('*').eq('user_id', USER_ID),
         supabase.from('tasks').select('*').eq('user_id', USER_ID),
-        supabase.from('logs').select('*').eq('user_id', USER_ID).order('timestamp', { ascending: false }),
-        supabase.from('stats').select('*').eq('user_id', USER_ID).single()
+        supabase.from('logs').select('*').eq('user_id', USER_ID).order('timestamp', { ascending: false })
       ]);
 
       // Reconstruct projects with tasks
@@ -40,7 +38,7 @@ export const syncService = {
         domains: domains || [],
         projects: projectsWithTasks,
         logs: logs || [],
-        stats: stats || null
+        stats: null // Stats table removed
       };
     } catch (error) {
       console.error('Error fetching initial data:', error);
@@ -123,26 +121,5 @@ export const syncService = {
       xp_amount: log.xpAmount
     });
     if (error) console.error('Error upserting log:', error);
-  },
-
-  async upsertStats(stats: UserStats) {
-    const { error } = await supabase.from('stats').upsert({
-      user_id: USER_ID,
-      nickname: stats.nickname,
-      total_rings_completed: stats.totalRingsCompleted,
-      total_tasks_completed: stats.totalTasksCompleted,
-      total_time_spent: stats.totalTimeSpent,
-      daily_rings_completed: stats.dailyRingsCompleted,
-      daily_progress: stats.dailyProgress,
-      max_daily_progress: stats.maxDailyProgress,
-      streak_days: stats.streakDays,
-      total_rings_created: stats.totalRingsCreated,
-      total_tasks_created: stats.totalTasksCreated,
-      last_active_date: stats.lastActiveDate,
-      xp: stats.xp,
-      level: stats.level,
-      sound_enabled: stats.soundEnabled
-    });
-    if (error) console.error('Error upserting stats:', error);
   }
 };

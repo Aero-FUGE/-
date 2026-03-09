@@ -5,6 +5,7 @@ import { Achievement, UserStats } from '../types';
 import { cn } from '../lib/utils';
 import { getLevelFromXP, getNextLevelXP } from '../constants/levels';
 import { IconMap } from '../constants/icons';
+import { soundManager } from '../services/soundService';
 
 interface ProfilePanelProps {
   isOpen: boolean;

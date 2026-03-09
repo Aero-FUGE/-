@@ -1,27 +1,203 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Terminal, Send, Bot, User, Loader2 } from 'lucide-react';
-import { ChatMessage, Project } from '../types';
-import { processSystemCommand } from '../services/geminiService';
+import { ChatMessage, Project, Domain, TaskStatus, Task } from '../types';
+import { processSystemCommand, AISystemAction } from '../services/geminiService';
+import { soundManager } from '../services/soundService';
 
 interface AITerminalProps {
   projects: Project[];
+  domains: Domain[];
   messages: ChatMessage[];
   setMessages: React.Dispatch<React.SetStateAction<ChatMessage[]>>;
   onUpdateProjects: (projects: Project[]) => void;
+  onUpdateDomains: (domains: Domain[]) => void;
+  screenToMap: (x: number, y: number) => { x: number; y: number };
+  addLogEntry: (type: any, eventName: string, targetName: string) => void;
+  gainXP: (amount: number, reason: string) => void;
+  soundEnabled: boolean;
+  onTriggerReconstruction: () => void;
+  onFocusOn: (id: string, type: 'RING' | 'DOMAIN') => void;
 }
 
-export const AITerminal: React.FC<AITerminalProps> = ({ projects, messages, setMessages, onUpdateProjects }) => {
+export const AITerminal: React.FC<AITerminalProps> = ({ 
+  projects, 
+  domains, 
+  messages, 
+  setMessages, 
+  onUpdateProjects, 
+  onUpdateDomains,
+  screenToMap,
+  addLogEntry,
+  gainXP,
+  soundEnabled,
+  onTriggerReconstruction,
+  onFocusOn
+}) => {
   const [isOpen, setIsOpen] = useState(false);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    if (isLoading && soundEnabled) {
+      soundManager.playAIProcessing();
+    } else {
+      soundManager.stopAIProcessing();
+      
+      // Play completion sound when loading finishes
+      if (!isLoading && soundEnabled) {
+        soundManager.playAIComplete();
+      }
+    }
+  }, [isLoading, soundEnabled]);
+
+  useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [messages]);
+
+  const executeActions = (actions: AISystemAction[]) => {
+    let updatedProjects = [...projects];
+    let updatedDomains = [...domains];
+    let hasChanges = false;
+
+    actions.forEach(action => {
+      switch (action.type) {
+        case 'CREATE_DOMAIN': {
+          const { name, color } = action.payload;
+          const { x, y } = screenToMap(window.innerWidth / 2, window.innerHeight / 2);
+          const newDomain: Domain = {
+            id: Math.random().toString(36).substr(2, 9),
+            name: name || '新领域',
+            color: color || '#0df2f2',
+            x: x - 200,
+            y: y - 200,
+            width: 400,
+            height: 400,
+          };
+          updatedDomains.push(newDomain);
+          addLogEntry('DOMAIN_CREATED', 'AI 神经链路：新领域已被开拓', newDomain.name);
+          gainXP(50, `AI 开拓领域：${newDomain.name}`);
+          hasChanges = true;
+          break;
+        }
+        case 'CREATE_RING': {
+          const { name, domainId, color, id } = action.payload;
+          const domain = updatedDomains.find(d => d.id === domainId);
+          const { x, y } = screenToMap(window.innerWidth / 2, window.innerHeight / 2);
+          const newProject: Project = {
+            id: id || Math.random().toString(36).substr(2, 9),
+            name: name || '新闭环',
+            x: domain ? 50 : x - 68,
+            y: domain ? 50 : y - 68,
+            scale: 1,
+            color: color || (domain ? domain.color : '#0df2f2'),
+            tasks: [],
+            domainId,
+          };
+          updatedProjects.push(newProject);
+          addLogEntry('RING_CREATED', 'AI 神经链路：检测到新闭环初始化', newProject.name);
+          gainXP(20, `AI 初始化闭环：${newProject.name}`);
+          hasChanges = true;
+          break;
+        }
+        case 'ADD_TASK': {
+          const { ringId, name, estimatedTime, notes } = action.payload;
+          updatedProjects = updatedProjects.map(p => {
+            if (p.id === ringId) {
+              const newTask: Task = {
+                id: Math.random().toString(36).substr(2, 9),
+                name: name || '新任务',
+                estimatedTime: estimatedTime || 60,
+                actualTime: 0,
+                status: TaskStatus.TODO,
+                notes: notes || '',
+                order: p.tasks.length,
+              };
+              addLogEntry('TASK_PROGRESS', 'AI 神经链路：任务已注入', newTask.name);
+              gainXP(5, `AI 注入任务：${newTask.name}`);
+              return { ...p, tasks: [...p.tasks, newTask] };
+            }
+            return p;
+          });
+          hasChanges = true;
+          break;
+        }
+        case 'UPDATE_TASK': {
+          const { ringId, taskId, status, actualTime, notes } = action.payload;
+          updatedProjects = updatedProjects.map(p => {
+            if (p.id === ringId) {
+              const updatedTasks = p.tasks.map(t => {
+                if (t.id === taskId) {
+                  const isNowDone = status === TaskStatus.DONE && t.status !== TaskStatus.DONE;
+                  if (isNowDone) {
+                    addLogEntry('TASK_COMPLETED', 'AI 神经链路：任务闭环完成', t.name);
+                    gainXP(10, `AI 完成任务：${t.name}`);
+                  }
+                  return {
+                    ...t,
+                    status: (status as TaskStatus) || t.status,
+                    actualTime: actualTime !== undefined ? actualTime : t.actualTime,
+                    notes: notes !== undefined ? notes : t.notes,
+                  };
+                }
+                return t;
+              });
+              return { ...p, tasks: updatedTasks };
+            }
+            return p;
+          });
+          hasChanges = true;
+          break;
+        }
+        case 'UPDATE_RING': {
+          const { id, name, scale, color, x, y } = action.payload;
+          updatedProjects = updatedProjects.map(p => {
+            if (p.id === id) {
+              return {
+                ...p,
+                name: name || p.name,
+                scale: scale !== undefined ? scale : p.scale,
+                color: color || p.color,
+                x: x !== undefined ? x : p.x,
+                y: y !== undefined ? y : p.y,
+              };
+            }
+            return p;
+          });
+          hasChanges = true;
+          break;
+        }
+        case 'ORGANIZE_MAP': {
+          const { layoutType } = action.payload;
+          // Simple grid layout for all rings
+          if (layoutType === 'GRID') {
+            updatedProjects = updatedProjects.map((p, i) => ({
+              ...p,
+              x: (i % 5) * 400,
+              y: Math.floor(i / 5) * 400,
+            }));
+          }
+          hasChanges = true;
+          break;
+        }
+        case 'FOCUS_ON': {
+          const { id, type } = action.payload;
+          // Small delay to ensure the object is created/updated in state
+          setTimeout(() => onFocusOn(id, type), 100);
+          break;
+        }
+      }
+    });
+
+    if (hasChanges) {
+      onTriggerReconstruction();
+      onUpdateDomains(updatedDomains);
+      onUpdateProjects(updatedProjects);
+    }
+  };
 
   const handleSend = async () => {
     if (!input.trim() || isLoading) return;
@@ -38,7 +214,7 @@ export const AITerminal: React.FC<AITerminalProps> = ({ projects, messages, setM
     setIsLoading(true);
 
     try {
-      const { response, updatedProjects } = await processSystemCommand(input, projects);
+      const { response, actions } = await processSystemCommand(input, projects, domains);
       
       const aiMsg: ChatMessage = {
         id: (Date.now() + 1).toString(),
@@ -48,8 +224,9 @@ export const AITerminal: React.FC<AITerminalProps> = ({ projects, messages, setM
       };
 
       setMessages((prev) => [...prev, aiMsg]);
-      if (updatedProjects) {
-        onUpdateProjects(updatedProjects);
+      
+      if (actions && actions.length > 0) {
+        executeActions(actions);
       }
     } catch (error) {
       const errorMsg: ChatMessage = {
@@ -93,27 +270,43 @@ export const AITerminal: React.FC<AITerminalProps> = ({ projects, messages, setM
                   <p className="text-sm text-white/40">我是系统助手。你可以向我汇报进度，或请求创建、拆分任务。</p>
                 </div>
               )}
-              {messages.map((msg) => (
-                <div
-                  key={msg.id}
-                  className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
-                >
-                  <div className={`flex gap-3 max-w-[85%] ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}>
-                    <div className={`size-8 rounded-lg flex items-center justify-center shrink-0 ${
-                      msg.role === 'user' ? 'bg-primary/10 text-primary' : 'bg-white/5 text-white/60'
-                    }`}>
-                      {msg.role === 'user' ? <User size={16} /> : <Bot size={16} />}
+              {messages.map((msg) => {
+                const isSystemPrompt = msg.content.startsWith('「系统提示：');
+                
+                if (isSystemPrompt && msg.role === 'assistant') {
+                  return (
+                    <div key={msg.id} className="flex justify-center">
+                      <div className="px-4 py-2 rounded-lg border border-primary/10 bg-primary/5">
+                        <p className="text-[11px] font-mono text-primary/70 italic tracking-wide">
+                          {msg.content}
+                        </p>
+                      </div>
                     </div>
-                    <div className={`p-3 rounded-xl text-sm leading-relaxed whitespace-pre-wrap ${
-                      msg.role === 'user' 
-                        ? 'bg-primary/20 text-primary rounded-tr-none' 
-                        : 'bg-white/5 text-white/90 rounded-tl-none border border-white/5'
-                    }`}>
-                      {msg.content}
+                  );
+                }
+
+                return (
+                  <div
+                    key={msg.id}
+                    className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
+                  >
+                    <div className={`flex gap-3 max-w-[85%] ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}>
+                      <div className={`size-8 rounded-lg flex items-center justify-center shrink-0 ${
+                        msg.role === 'user' ? 'bg-primary/10 text-primary' : 'bg-white/5 text-white/60'
+                      }`}>
+                        {msg.role === 'user' ? <User size={16} /> : <Bot size={16} />}
+                      </div>
+                      <div className={`p-3 rounded-xl text-sm leading-relaxed whitespace-pre-wrap ${
+                        msg.role === 'user' 
+                          ? 'bg-primary/20 text-primary rounded-tr-none' 
+                          : 'bg-white/5 text-white/90 rounded-tl-none border border-white/5'
+                      }`}>
+                        {msg.content}
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
               {isLoading && (
                 <div className="flex justify-start">
                   <div className="flex gap-3">

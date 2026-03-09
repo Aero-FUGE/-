@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { X, Archive, Calendar, Clock, FileText, Search, Filter } from 'lucide-react';
 import { Project, Task, TaskStatus } from '../types';
 import { cn } from '../lib/utils';
+import { soundManager } from '../services/soundService';
 
 interface SystemArchiveProps {
   isOpen: boolean;

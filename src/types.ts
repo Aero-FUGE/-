@@ -63,6 +63,8 @@ export interface Domain {
   id: string;
   name: string;
   color: string;
+  themeColor?: string;
+  description?: string;
   x: number;
   y: number;
   width: number;

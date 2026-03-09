@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { X, Activity, Terminal, Calendar, Zap, CheckCircle2, PlusCircle, Trophy } from 'lucide-react';
 import { SystemLogEntry } from '../types';
 import { cn } from '../lib/utils';
+import { soundManager } from '../services/soundService';
 
 interface SystemLogProps {
   isOpen: boolean;

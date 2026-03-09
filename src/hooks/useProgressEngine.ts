@@ -2,6 +2,7 @@ import { useState, useCallback } from 'react';
 import { UserStats, Achievement, SystemLogEntry, ChatMessage, Project, TaskStatus } from '../types';
 import { ALL_TITLES } from '../constants/titles';
 import { getLevelFromXP } from '../constants/levels';
+import { soundManager } from '../services/soundService';
 
 export const useProgressEngine = (initialStats: UserStats) => {
   const [stats, setStats] = useState<UserStats>(initialStats);
@@ -28,6 +29,7 @@ export const useProgressEngine = (initialStats: UserStats) => {
       const newLevel = newLevelInfo.level;
 
       if (newLevel > oldLevel) {
+        soundManager.playLevelUp();
         const levelUpMsg: ChatMessage = {
           id: `levelup-${Date.now()}`,
           role: 'assistant',
@@ -86,6 +88,7 @@ export const useProgressEngine = (initialStats: UserStats) => {
         }
 
         if (unlocked) {
+          soundManager.playAchievement();
           const unlockedAchievement = { ...achievement, unlockedAt: Date.now() };
           newlyUnlocked.push(unlockedAchievement);
           gainXP(achievement.xpReward, `解锁成就：${achievement.title}`);

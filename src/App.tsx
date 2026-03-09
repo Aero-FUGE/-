@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Plus, Minus, RotateCcw, Target, Layers, BarChart3, User as UserIcon, Trophy, Maximize2, Activity, FileText, Box } from 'lucide-react';
+import { Plus, Minus, RotateCcw, Target, Layers, BarChart3, User as UserIcon, Trophy, Maximize2, Activity, FileText, Box, Globe } from 'lucide-react';
 import { AchievementPanel } from './components/AchievementPanel';
 import { SystemArchive } from './components/SystemArchive';
 import { SystemLog } from './components/SystemLog';
@@ -14,6 +14,8 @@ import { ChatMessage, Project, TaskStatus, Achievement, UserStats, SystemLogEntr
 import { Ring } from './components/Ring';
 import { SidePanel } from './components/SidePanel';
 import { AITerminal } from './components/AITerminal';
+import WorldMap from './components/WorldMap';
+import DomainMap from './components/DomainMap';
 
 // Import Engines
 import { useMapEngine } from './hooks/useMapEngine';
@@ -22,16 +24,19 @@ import { useTaskEngine } from './hooks/useTaskEngine';
 import { useProgressEngine } from './hooks/useProgressEngine';
 
 import { syncService } from './services/syncService';
+import { soundManager } from './services/soundService';
 
 const INITIAL_DOMAINS: Domain[] = [];
 const INITIAL_PROJECTS: Project[] = [];
 
+const CLICK_SOUND_URL = 'https://assets.mixkit.co/active_storage/sfx/2571/2571-preview.mp3';
+const COMPLETE_SOUND_URL = 'https://assets.mixkit.co/active_storage/sfx/2013/2013-preview.mp3';
+
+import WorldMap from './components/WorldMap';
+import DomainMap from './components/DomainMap';
+
 export default function App() {
   const mapRef = useRef<HTMLDivElement>(null);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-
-  const completeAudioRef = useRef<HTMLAudioElement | null>(null);
-
   const [sessionStartTime] = useState(Date.now());
   const [uptime, setUptime] = useState('00:00:00');
 
@@ -84,6 +89,8 @@ export default function App() {
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [editingProjectId, setEditingProjectId] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [currentView, setCurrentView] = useState<'legacy' | 'world' | 'domain'>('world');
+  const [activeDomainId, setActiveDomainId] = useState<string | null>(null);
   
   // UI States
   const [isAchievementOpen, setIsAchievementOpen] = useState(false);
@@ -91,6 +98,39 @@ export default function App() {
   const [isLogOpen, setIsLogOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [isReconstructing, setIsReconstructing] = useState(false);
+  const [ripples, setRipples] = useState<{ id: number; x: number; y: number }[]>([]);
+
+  const reconstructionAudioRef = useRef<HTMLAudioElement | null>(null);
+
+  useEffect(() => {
+    reconstructionAudioRef.current = new Audio('https://assets.mixkit.co/active_storage/sfx/2567/2567-preview.mp3');
+    reconstructionAudioRef.current.volume = 0.4;
+  }, []);
+
+  const triggerReconstruction = () => {
+    setIsReconstructing(true);
+    if (stats.soundEnabled && reconstructionAudioRef.current) {
+      reconstructionAudioRef.current.currentTime = 0;
+      reconstructionAudioRef.current.play().catch(() => {});
+    }
+    setTimeout(() => setIsReconstructing(false), 1500);
+  };
+
+  const handleFocusOn = (id: string, type: 'RING' | 'DOMAIN') => {
+    if (type === 'RING') {
+      const ring = projects.find(p => p.id === id);
+      if (ring) {
+        setViewState({ x: -ring.x + window.innerWidth / 2, y: -ring.y + window.innerHeight / 2, zoom: 1 });
+        setSelectedProjectId(id);
+      }
+    } else {
+      const domain = domains.find(d => d.id === id);
+      if (domain) {
+        setViewState({ x: -domain.x + window.innerWidth / 2, y: -domain.y + window.innerHeight / 2, zoom: 0.8 });
+      }
+    }
+  };
 
   // Auto-hide loading screen after mount
   useEffect(() => {
@@ -123,9 +163,6 @@ export default function App() {
   );
 
   useEffect(() => {
-    // Shorter click sound
-    audioRef.current = new Audio('https://assets.mixkit.co/active_storage/sfx/2571/2571-preview.mp3');
-    completeAudioRef.current = new Audio('https://assets.mixkit.co/active_storage/sfx/2013/2013-preview.mp3');
     addLogEntry('SYSTEM_AWAKENED', '系统提示：神经链路已建立', '系统觉醒阶段：初始化完成');
 
     // Supabase Initial Load with LocalStorage Fallback
@@ -137,6 +174,7 @@ export default function App() {
           setProjects(data.projects);
           setSystemLogs(data.logs);
           if (data.stats) setStats(data.stats);
+          setIsLoading(false);
           return;
         }
       } catch (e) {
@@ -153,46 +191,84 @@ export default function App() {
       if (localProjects) setProjects(JSON.parse(localProjects));
       if (localStats) setStats(JSON.parse(localStats));
       if (localLogs) setSystemLogs(JSON.parse(localLogs));
+      setIsLoading(false);
     };
     loadData();
+  }, []); // Only on mount
 
-    // Global click sound handler
-    const playClickSound = (e: MouseEvent) => {
-      if (!stats.soundEnabled) return;
-      
+  useEffect(() => {
+    soundManager.setEnabled(stats.soundEnabled);
+  }, [stats.soundEnabled]);
+
+  // Global Click Sound Listener
+  useEffect(() => {
+    const handleGlobalClick = (e: MouseEvent) => {
+      soundManager.unlock();
       const target = e.target as HTMLElement;
-      const isInteractive = 
-        target.tagName === 'BUTTON' || 
-        target.tagName === 'A' || 
-        target.closest('button') || 
-        target.closest('a') ||
-        window.getComputedStyle(target).cursor === 'pointer';
+      
+      // Define what counts as an interactive element
+      const interactiveSelectors = [
+        'button',
+        'a',
+        'input',
+        'select',
+        'textarea',
+        '[role="button"]',
+        '[onclick]',
+        '.cursor-pointer',
+        '.task-item',
+        '.grid-item',
+        '.toggle',
+        'svg',
+        'path',
+        'circle',
+        'rect'
+      ];
 
-      if (isInteractive && audioRef.current) {
-        audioRef.current.currentTime = 0;
-        audioRef.current.volume = 0.1; 
-        audioRef.current.play().catch(() => {});
+      const isInteractive = interactiveSelectors.some(selector => 
+        target.closest(selector) !== null
+      );
+
+      if (stats.soundEnabled) {
+        soundManager.playClick(isInteractive);
       }
+
+      // Console logging as requested
+      if (isInteractive) {
+        console.log(`[SoundEngine] Interactive element clicked: <${target.tagName.toLowerCase()}>`, target);
+      } else {
+        console.log(`[SoundEngine] Non-interactive area clicked: <${target.tagName.toLowerCase()}>`);
+      }
+
+      // Ripple effect
+      const newRipple = {
+        id: Date.now(),
+        x: e.clientX,
+        y: e.clientY,
+      };
+      setRipples(prev => [...prev, newRipple]);
+      setTimeout(() => {
+        setRipples(prev => prev.filter(r => r.id !== newRipple.id));
+      }, 1000);
     };
 
     const handleOnline = () => {
       // Sync local data to Supabase when back online
       const localDomains = localStorage.getItem('system_domains');
       const localProjects = localStorage.getItem('system_projects');
-      const localStats = localStorage.getItem('system_stats');
       
       if (localDomains) JSON.parse(localDomains).forEach((d: any) => syncService.upsertDomain(d));
       if (localProjects) JSON.parse(localProjects).forEach((p: any) => syncService.upsertProject(p));
-      if (localStats) syncService.upsertStats(JSON.parse(localStats));
     };
 
-    document.addEventListener('click', playClickSound);
+    // Use window and capture phase for ripple and sound
+    window.addEventListener('click', handleGlobalClick, true);
     window.addEventListener('online', handleOnline);
     return () => {
-      document.removeEventListener('click', playClickSound);
+      window.removeEventListener('click', handleGlobalClick, true);
       window.removeEventListener('online', handleOnline);
     };
-  }, [stats.soundEnabled, addLogEntry, setDomains, setProjects, setSystemLogs, setStats]);
+  }, [stats.soundEnabled]);
 
   // Sync to LocalStorage and Supabase
   useEffect(() => {
@@ -208,17 +284,17 @@ export default function App() {
     
     // Check for completion sound
     const completedCount = projects.filter(p => p.tasks.length > 0 && p.tasks.every(t => t.status === TaskStatus.DONE)).length;
-    if (completedCount > stats.totalRingsCompleted && completeAudioRef.current && stats.soundEnabled) {
-      completeAudioRef.current.currentTime = 0;
-      completeAudioRef.current.volume = 0.3;
-      completeAudioRef.current.play().catch(() => {});
+    if (completedCount > stats.totalRingsCompleted && stats.soundEnabled) {
+      soundManager.playCompletion();
+      
+      // Update stats to prevent re-triggering and track progress
+      setStats(prev => ({ ...prev, totalRingsCompleted: completedCount }));
     }
   }, [projects, isLoading, stats.totalRingsCompleted, stats.soundEnabled]);
 
   useEffect(() => {
     if (isLoading) return;
     localStorage.setItem('system_stats', JSON.stringify(stats));
-    syncService.upsertStats(stats);
   }, [stats, isLoading]);
 
   useEffect(() => {
@@ -382,7 +458,9 @@ export default function App() {
             </div>
           </div>
           <button 
-            onClick={() => setIsAchievementOpen(true)}
+            onClick={() => {
+              setIsAchievementOpen(true);
+            }}
             className="flex items-center gap-2 px-3 py-1 bg-primary/10 border border-primary/30 rounded text-primary hover:bg-primary/20 transition-all"
           >
             <Trophy size={14} />
@@ -420,55 +498,86 @@ export default function App() {
         {/* Scanlines */}
         <div data-map-bg="true" className="absolute inset-0 pointer-events-none opacity-10 bg-[linear-gradient(to_bottom,transparent_50%,rgba(0,0,0,0.5)_50%)] bg-[length:100%_4px]" />
 
-        {/* Rings Container */}
-        <motion.div
-          animate={{ x: viewState.x, y: viewState.y, scale: viewState.scale }}
-          transition={{
-            x: { duration: 0 },
-            y: { duration: 0 },
-            scale: { type: 'spring', stiffness: 300, damping: 30 }
-          }}
-          className="absolute inset-0 rings-container"
-          data-map-bg="true"
-        >
-          {/* Domains */}
-          {domains.map(domain => (
-            <DomainArea 
-              key={domain.id} 
-              domain={domain} 
-              projects={projects.filter(p => p.domainId === domain.id)}
-              selectedProjectId={selectedProjectId}
-              isProjectDragging={!!draggingProjectId}
-              onAddProject={addNewProject}
-              onDrag={handleDragDomain}
-              onResize={(id, w, h) => setDomains(prev => prev.map(d => d.id === id ? { ...d, width: w, height: h } : d))}
-              onUpdate={(id, up) => setDomains(prev => prev.map(d => d.id === id ? { ...d, ...up } : d))}
-              onRingClick={setSelectedProjectId}
-              onRingDoubleClick={setEditingProjectId}
-              onRingDrag={(id, x, y) => dragRing(id, x, y, domains, (m, t) => addLogEntry('DOMAIN_PROGRESS', m, t), gainXP)}
-              onRingDragStart={setDraggingProjectId}
-              onDeleteDomain={handleDeleteDomain}
-            />
-          ))}
+        {currentView === 'world' ? (
+          <WorldMap 
+            domains={domains}
+            projects={projects}
+            onSelectDomain={(id) => {
+              setActiveDomainId(id);
+              setCurrentView('domain');
+            }}
+          />
+        ) : currentView === 'domain' ? (
+          <DomainMap 
+            domain={domains.find(d => d.id === activeDomainId)!}
+            projects={projects.filter(p => p.domainId === activeDomainId)}
+            selectedProjectId={selectedProjectId}
+            onBack={() => setCurrentView('world')}
+            onSelectProject={setSelectedProjectId}
+            onEditProject={setEditingProjectId}
+            onDragProject={dragRing}
+            onAddProject={() => addNewProject(activeDomainId || undefined)}
+          />
+        ) : (
+          <motion.div
+            animate={{ x: viewState.x, y: viewState.y, scale: viewState.scale }}
+            transition={{
+              x: { duration: 0 },
+              y: { duration: 0 },
+              scale: { type: 'spring', stiffness: 300, damping: 30 }
+            }}
+            className="absolute inset-0 rings-container"
+            data-map-bg="true"
+          >
+            {/* Domains */}
+            {domains.map(domain => (
+              <DomainArea 
+                key={domain.id} 
+                domain={domain} 
+                projects={projects.filter(p => p.domainId === domain.id)}
+                selectedProjectId={selectedProjectId}
+                isProjectDragging={!!draggingProjectId}
+                onAddProject={addNewProject}
+                onDrag={handleDragDomain}
+                onResize={(id, w, h) => setDomains(prev => prev.map(d => d.id === id ? { ...d, width: w, height: h } : d))}
+                onUpdate={(id, up) => setDomains(prev => prev.map(d => d.id === id ? { ...d, ...up } : d))}
+                onRingClick={setSelectedProjectId}
+                onRingDoubleClick={setEditingProjectId}
+                onRingDrag={(id, x, y) => dragRing(id, x, y, domains, (m, t) => addLogEntry('DOMAIN_PROGRESS', m, t), gainXP)}
+                onRingDragStart={setDraggingProjectId}
+                onDeleteDomain={handleDeleteDomain}
+              />
+            ))}
 
-          {/* Unbound Projects */}
-          {projects.filter(p => !p.domainId).map((project) => (
-            <Ring
-              key={project.id}
-              project={project}
-              x={project.x}
-              y={project.y}
-              isSelected={selectedProjectId === project.id}
-              onClick={() => setSelectedProjectId(project.id)}
-              onDoubleClick={() => setEditingProjectId(project.id)}
-              onDrag={(id, x, y) => dragRing(id, x, y, domains, (m, t) => addLogEntry('DOMAIN_PROGRESS', m, t), gainXP)}
-              onDragStart={() => setDraggingProjectId(project.id)}
-            />
-          ))}
-        </motion.div>
+            {/* Unbound Projects */}
+            {projects.filter(p => !p.domainId).map((project) => (
+              <Ring
+                key={project.id}
+                project={project}
+                x={project.x}
+                y={project.y}
+                isSelected={selectedProjectId === project.id}
+                onClick={() => setSelectedProjectId(project.id)}
+                onDoubleClick={() => setEditingProjectId(project.id)}
+                onDrag={(id, x, y) => dragRing(id, x, y, domains, (m, t) => addLogEntry('DOMAIN_PROGRESS', m, t), gainXP)}
+                onDragStart={() => setDraggingProjectId(project.id)}
+              />
+            ))}
+          </motion.div>
+        )}
 
         {/* Map Controls */}
         <div className="absolute bottom-8 left-8 flex flex-col gap-2 z-30 hud-panel">
+          <button 
+            onClick={() => setCurrentView(prev => prev === 'legacy' ? 'world' : 'legacy')}
+            title={currentView === 'legacy' ? "切换到世界地图" : "切换到自由地图"}
+            className={`w-10 h-10 border rounded flex items-center justify-center transition-all mb-2 ${
+              currentView !== 'legacy' ? 'bg-primary text-background-dark border-primary shadow-[0_0_10px_rgba(13,242,242,0.4)]' : 'bg-background-dark/80 border-secondary/30 text-secondary hover:bg-secondary hover:text-background-dark'
+            }`}
+          >
+            <Globe size={18} />
+          </button>
+
           <button 
             onClick={addNewDomain}
             title="开拓新领域"
@@ -542,6 +651,54 @@ export default function App() {
         onAddTask={() => setStats(prev => ({ ...prev, totalTasksCreated: prev.totalTasksCreated + 1 }))}
       />
 
+      {/* Reconstruction Overlay */}
+      <AnimatePresence>
+        {isReconstructing && (
+          <motion.div
+            initial={{ opacity: 0, backdropFilter: 'blur(0px)' }}
+            animate={{ opacity: 1, backdropFilter: 'blur(20px)' }}
+            exit={{ opacity: 0, backdropFilter: 'blur(0px)' }}
+            className="fixed inset-0 z-[100] pointer-events-none flex items-center justify-center bg-primary/5"
+          >
+            <motion.div
+              initial={{ scale: 0.8, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 1.2, opacity: 0 }}
+              className="text-primary font-mono text-xl tracking-[0.5em] uppercase"
+            >
+              System Reconstructing...
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Global Ripple Effect */}
+      <div className="fixed inset-0 pointer-events-none z-[999]">
+        <AnimatePresence>
+          {ripples.map(ripple => (
+            <motion.div
+              key={ripple.id}
+              initial={{ scale: 0, opacity: 0.5 }}
+              animate={{ scale: 4, opacity: 0 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.8, ease: "easeOut" }}
+              style={{
+                position: 'absolute',
+                left: ripple.x,
+                top: ripple.y,
+                width: 40,
+                height: 40,
+                marginLeft: -20,
+                marginTop: -20,
+                borderRadius: '50%',
+                border: '1px solid rgba(13, 242, 242, 0.5)',
+                background: 'radial-gradient(circle, rgba(13, 242, 242, 0.2) 0%, transparent 70%)',
+              }}
+            />
+          ))}
+        </AnimatePresence>
+      </div>
+
       {/* Achievement Panel */}
       <AchievementPanel
         isOpen={isAchievementOpen}
@@ -552,12 +709,20 @@ export default function App() {
       {/* AI Terminal */}
       <AITerminal 
         projects={projects}
+        domains={domains}
         messages={messages}
         setMessages={setMessages}
         onUpdateProjects={(newProjects) => {
           setProjects(newProjects);
           checkAchievements(newProjects, stats);
         }}
+        onUpdateDomains={setDomains}
+        screenToMap={screenToMap}
+        addLogEntry={addLogEntry}
+        gainXP={(amount, reason) => gainXP(amount, reason, (msg) => setMessages(prev => [...prev, msg]))}
+        soundEnabled={stats.soundEnabled}
+        onTriggerReconstruction={triggerReconstruction}
+        onFocusOn={handleFocusOn}
       />
 
       {/* Bottom Nav */}
@@ -653,11 +818,15 @@ export default function App() {
 
       <ProfilePanel
         isOpen={isProfileOpen}
-        onClose={() => setIsProfileOpen(false)}
+        onClose={() => {
+          setIsProfileOpen(false);
+        }}
         stats={stats}
         achievements={achievements}
         onUpdateNickname={(nickname) => setStats(prev => ({ ...prev, nickname }))}
-        onToggleSound={(enabled) => setStats(prev => ({ ...prev, soundEnabled: enabled }))}
+        onToggleSound={(enabled) => {
+          setStats(prev => ({ ...prev, soundEnabled: enabled }));
+        }}
       />
 
       {/* Ambient Overlay */}

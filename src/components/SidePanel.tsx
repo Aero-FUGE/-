@@ -4,6 +4,7 @@ import { X, Clock, CheckCircle2, Circle, Trash2, Plus, Minus, Maximize2, FileTex
 import { Project, Task, TaskStatus, Domain } from '../types';
 import { cn } from '../lib/utils';
 import { NoteEditor } from './NoteEditor';
+import { soundManager } from '../services/soundService';
 
 interface SidePanelProps {
   project: Project | null;

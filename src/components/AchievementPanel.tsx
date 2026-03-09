@@ -4,6 +4,7 @@ import { X, Trophy } from 'lucide-react';
 import { Achievement } from '../types';
 import { cn } from '../lib/utils';
 import { IconMap } from '../constants/icons';
+import { soundManager } from '../services/soundService';
 
 interface AchievementPanelProps {
   isOpen: boolean;

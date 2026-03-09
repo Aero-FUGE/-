@@ -2,6 +2,7 @@ import React, { useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Project, TaskStatus } from '../types';
 import { cn } from '../lib/utils';
+import { soundManager } from '../services/soundService';
 
 interface RingProps {
   project: Project;
@@ -52,6 +53,7 @@ export const Ring: React.FC<RingProps> = ({ project, x, y, isSelected, onClick, 
   React.useEffect(() => {
     // If it just became complete
     if (isComplete && !prevIsComplete.current) {
+      soundManager.playCompletion();
       setShowCelebration(true);
       const timer = setTimeout(() => setShowCelebration(false), 5000);
       return () => clearTimeout(timer);
