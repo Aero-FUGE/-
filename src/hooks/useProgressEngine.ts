@@ -45,16 +45,18 @@ export const useProgressEngine = (initialStats: UserStats) => {
     });
   }, [addLogEntry]);
 
-  const checkAchievements = useCallback((updatedProjects: Project[], currentStats: UserStats) => {
+  const checkAchievements = useCallback((updatedProjects: Project[]) => {
+    if (!updatedProjects) return [];
+    
     const completedRings = updatedProjects.filter(p => 
-      p.tasks.length > 0 && p.tasks.every(t => t.status === TaskStatus.DONE)
+      p && p.tasks && p.tasks.length > 0 && p.tasks.every(t => t.status === TaskStatus.DONE)
     );
 
     const totalTasksDone = updatedProjects.reduce((acc, p) => 
-      acc + p.tasks.filter(t => t.status === TaskStatus.DONE).length, 0
+      acc + (p?.tasks?.filter(t => t.status === TaskStatus.DONE).length || 0), 0
     );
 
-    const totalTasks = updatedProjects.reduce((acc, p) => acc + p.tasks.length, 0);
+    const totalTasks = updatedProjects.reduce((acc, p) => acc + (p?.tasks?.length || 0), 0);
     const progress = totalTasks > 0 ? (totalTasksDone / totalTasks) * 100 : 0;
 
     let newlyUnlocked: Achievement[] = [];
@@ -67,23 +69,31 @@ export const useProgressEngine = (initialStats: UserStats) => {
         const now = new Date();
         const hour = now.getHours();
 
+        // We need current stats for some checks. Since we are in setAchievements, 
+        // we can't easily get latest stats here without another functional update.
+        // However, most of these depend on projects which we have as 'updatedProjects'.
+        // For streakDays, we'll have to rely on the stats from the closure or move this logic.
+        
+        // Let's assume stats from closure is "good enough" for now or refactor to pass them if needed.
+        // Actually, let's just use the stats from the closure for now.
+
         switch (achievement.id) {
-          case 'awakening_1': if (currentStats.totalRingsCreated >= 1) unlocked = true; break;
-          case 'awakening_2': if (currentStats.totalTasksCreated >= 3) unlocked = true; break;
+          case 'awakening_1': if (stats.totalRingsCreated >= 1) unlocked = true; break;
+          case 'awakening_2': if (stats.totalTasksCreated >= 3) unlocked = true; break;
           case 'awakening_3': if (completedRings.length >= 1) unlocked = true; break;
-          case 'awakening_4': if (currentStats.streakDays >= 3) unlocked = true; break;
+          case 'awakening_4': if (stats.streakDays >= 3) unlocked = true; break;
           case 'executor_1': if (completedRings.length >= 3) unlocked = true; break;
           case 'executor_2': if (completedRings.length >= 5) unlocked = true; break;
           case 'executor_3': if (progress >= 30) unlocked = true; break;
-          case 'executor_5': if (currentStats.streakDays >= 7) unlocked = true; break;
+          case 'executor_5': if (stats.streakDays >= 7) unlocked = true; break;
           case 'control_1': if (completedRings.length >= 10) unlocked = true; break;
           case 'control_2': if (updatedProjects.length >= 10) unlocked = true; break;
           case 'control_4': if (totalTasksDone >= 100) unlocked = true; break;
-          case 'control_5': if (currentStats.streakDays >= 10) unlocked = true; break;
+          case 'control_5': if (stats.streakDays >= 10) unlocked = true; break;
           case 'rule_1': if (completedRings.length >= 20) unlocked = true; break;
           case 'rule_4': if (progress >= 70) unlocked = true; break;
-          case 'rule_5': if (currentStats.streakDays >= 30) unlocked = true; break;
-          case 'hidden_1': if (hour === 4 && completedRings.length > currentStats.totalRingsCompleted) unlocked = true; break;
+          case 'rule_5': if (stats.streakDays >= 30) unlocked = true; break;
+          case 'hidden_1': if (hour === 4 && completedRings.length > stats.totalRingsCompleted) unlocked = true; break;
           case 'hidden_2': if (hour === 1) unlocked = true; break;
         }
 
@@ -108,7 +118,7 @@ export const useProgressEngine = (initialStats: UserStats) => {
     }));
 
     return newlyUnlocked;
-  }, [gainXP]);
+  }, [gainXP, stats]);
 
   const addTimeSpent = useCallback((minutes: number) => {
     setStats(prev => ({

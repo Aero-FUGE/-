@@ -6,21 +6,29 @@ export const useLoopEngine = (initialProjects: Project[]) => {
   const [draggingProjectId, setDraggingProjectId] = useState<string | null>(null);
 
   const scaleRing = useCallback((id: string, delta: number) => {
-    setProjects((prev) => prev.map((p) => {
-      if (p.id === id) {
-        const newScale = Math.max(0.5, Math.min(3, p.scale + delta));
-        return { ...p, scale: newScale };
-      }
-      return p;
-    }));
+    setProjects((prev) => {
+      if (!prev) return [];
+      return prev.map((p) => {
+        if (p.id === id) {
+          const newScale = Math.max(0.5, Math.min(3, p.scale + delta));
+          return { ...p, scale: newScale };
+        }
+        return p;
+      });
+    });
   }, []);
 
   const deleteProject = useCallback((id: string) => {
-    setProjects((prev) => prev.filter((p) => p.id !== id));
+    setProjects((prev) => {
+      if (!prev) return [];
+      return prev.filter((p) => p.id !== id);
+    });
   }, []);
 
   const dragRing = useCallback((id: string, x: number, y: number, domains: Domain[], onLog: (msg: string, target: string) => void, onXP: (xp: number, reason: string) => void) => {
-    setProjects((prev) => prev.map((p) => {
+    setProjects((prev) => {
+      if (!prev) return [];
+      return prev.map((p) => {
       if (p.id === id) {
         let newDomainId = null;
         let finalX = x;
@@ -29,7 +37,7 @@ export const useLoopEngine = (initialProjects: Project[]) => {
         const ringCenterX = x + 68;
         const ringCenterY = y + 68;
         
-        const targetDomain = domains.find(d => 
+        const targetDomain = (domains || []).find(d => 
           ringCenterX >= d.x && ringCenterX <= d.x + d.width &&
           ringCenterY >= d.y && ringCenterY <= d.y + d.height
         );
@@ -44,7 +52,7 @@ export const useLoopEngine = (initialProjects: Project[]) => {
           finalX = x - targetDomain.x;
           finalY = y - targetDomain.y;
         } else if (p.domainId) {
-          const oldDomain = domains.find(d => d.id === p.domainId);
+          const oldDomain = (domains || []).find(d => d.id === p.domainId);
           onLog(`系统提示：闭环已从 ${oldDomain?.name || '领域'} 解除绑定`, p.name);
           // When unbinding, x and y are already absolute from the drag event
         }
@@ -52,7 +60,8 @@ export const useLoopEngine = (initialProjects: Project[]) => {
         return { ...p, x: finalX, y: finalY, domainId: newDomainId };
       }
       return p;
-    }));
+      });
+    });
     setDraggingProjectId(null);
   }, []);
 

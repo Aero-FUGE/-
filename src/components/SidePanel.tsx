@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, Clock, CheckCircle2, Circle, Trash2, Plus, Minus, Maximize2, FileText, ChevronRight, Play, Pause, Square } from 'lucide-react';
+import { X, Clock, CheckCircle2, Circle, Trash2, Plus, Minus, Maximize2, FileText, ChevronRight, Play, Pause, Square, Calendar, AlertCircle } from 'lucide-react';
 import { Project, Task, TaskStatus, Domain } from '../types';
 import { cn } from '../lib/utils';
 import { NoteEditor } from './NoteEditor';
@@ -166,6 +166,18 @@ export const SidePanel: React.FC<SidePanelProps> = ({
     });
   };
 
+  const formatTimestampForInput = (ts?: number) => {
+    if (!ts) return '';
+    const date = new Date(ts);
+    const pad = (n: number) => n.toString().padStart(2, '0');
+    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+  };
+
+  const parseInputToTimestamp = (val: string) => {
+    if (!val) return undefined;
+    return new Date(val).getTime();
+  };
+
   return (
     <motion.div
       initial={{ x: '100%' }}
@@ -176,14 +188,14 @@ export const SidePanel: React.FC<SidePanelProps> = ({
     >
       {/* Header */}
       <div className="p-6 border-b border-primary/20 flex items-center justify-between bg-primary/5">
-        <div>
+        <div className="flex-1">
           <input
             value={project.name}
             onChange={(e) => onUpdateProject({ ...project, name: e.target.value })}
             className="bg-transparent border-none text-xl font-bold text-primary focus:ring-0 p-0 w-full"
           />
 
-          <div className="flex gap-4 mt-2">
+          <div className="flex flex-wrap gap-4 mt-2">
             <div className="flex items-center gap-1 text-[10px] text-white/40 uppercase tracking-widest">
               <Clock size={10} />
               <span>总计: {Math.floor(totalTime / 60)}h {totalTime % 60}m</span>
@@ -191,6 +203,15 @@ export const SidePanel: React.FC<SidePanelProps> = ({
             <div className="flex items-center gap-1 text-[10px] text-primary uppercase tracking-widest">
               <Clock size={10} />
               <span>剩余: {Math.floor(remainingTime / 60)}h {remainingTime % 60}m</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <Calendar size={10} className="text-red-400" />
+              <input
+                type="datetime-local"
+                value={formatTimestampForInput(project.deadline)}
+                onChange={(e) => onUpdateProject({ ...project, deadline: parseInputToTimestamp(e.target.value) })}
+                className="bg-white/5 border border-white/10 rounded px-2 py-0.5 text-[10px] text-red-400 focus:ring-1 focus:ring-red-400 outline-none"
+              />
             </div>
           </div>
 
@@ -211,7 +232,7 @@ export const SidePanel: React.FC<SidePanelProps> = ({
         </div>
         <button
           onClick={onClose}
-          className="p-2 hover:bg-white/10 rounded-full text-white/60 transition-colors"
+          className="p-2 hover:bg-white/10 rounded-full text-white/60 transition-colors ml-4"
         >
           <X size={20} />
         </button>
@@ -256,15 +277,23 @@ export const SidePanel: React.FC<SidePanelProps> = ({
                     {task.status === TaskStatus.DONE ? <CheckCircle2 size={18} /> : <Circle size={18} />}
                   </button>
                   <div className="flex-1 space-y-2">
-                    <input
-                      value={task.name}
-                      onChange={(e) => updateTask(task.id, { name: e.target.value })}
-                      className={cn(
-                        "bg-transparent border-none p-0 text-sm font-medium w-full focus:ring-0",
-                        task.status === TaskStatus.DONE && "line-through text-white/40"
+                    <div className="flex items-center gap-2">
+                      <input
+                        value={task.name}
+                        onChange={(e) => updateTask(task.id, { name: e.target.value })}
+                        className={cn(
+                          "bg-transparent border-none p-0 text-sm font-medium flex-1 focus:ring-0",
+                          task.status === TaskStatus.DONE && "line-through text-white/40"
+                        )}
+                      />
+                      {task.deadline && task.status !== TaskStatus.DONE && (
+                        <AlertCircle size={12} className={cn(
+                          "animate-pulse",
+                          task.deadline < Date.now() ? "text-red-500" : "text-yellow-500"
+                        )} />
                       )}
-                    />
-                    <div className="flex items-center gap-4">
+                    </div>
+                    <div className="flex flex-wrap items-center gap-y-2 gap-x-4">
                       <div className="flex items-center gap-1">
                         <span className="text-[10px] text-white/40 uppercase tracking-tighter">预计</span>
                         <input
@@ -274,6 +303,16 @@ export const SidePanel: React.FC<SidePanelProps> = ({
                           className="bg-transparent border-none p-0 text-[10px] text-primary w-12 focus:ring-0 font-mono"
                         />
                         <span className="text-[10px] text-white/40 uppercase tracking-tighter">min</span>
+                      </div>
+
+                      <div className="flex items-center gap-1">
+                        <Calendar size={10} className="text-white/20" />
+                        <input
+                          type="datetime-local"
+                          value={formatTimestampForInput(task.deadline)}
+                          onChange={(e) => updateTask(task.id, { deadline: parseInputToTimestamp(e.target.value) })}
+                          className="bg-transparent border border-white/10 rounded px-1 py-0.5 text-[9px] text-white/40 focus:ring-1 focus:ring-primary outline-none"
+                        />
                       </div>
 
                       {/* Timer UI */}

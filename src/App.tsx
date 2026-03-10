@@ -1,11 +1,10 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Plus, Minus, RotateCcw, Target, Layers, BarChart3, User as UserIcon, Trophy, Maximize2, Activity, FileText, Box, Globe } from 'lucide-react';
+import { Plus, Minus, RotateCcw, User as UserIcon, Trophy, Layers, FileText, Activity } from 'lucide-react';
 import { AchievementPanel } from './components/AchievementPanel';
 import { SystemArchive } from './components/SystemArchive';
 import { SystemLog } from './components/SystemLog';
 import { ProfilePanel } from './components/ProfilePanel';
-import { DomainArea } from './components/DomainArea';
 import { LoadingScreen } from './components/LoadingScreen';
 import { cn } from './lib/utils';
 import { ALL_TITLES } from './constants/titles';
@@ -14,11 +13,11 @@ import { ChatMessage, Project, TaskStatus, Achievement, UserStats, SystemLogEntr
 import { Ring } from './components/Ring';
 import { SidePanel } from './components/SidePanel';
 import { AITerminal } from './components/AITerminal';
+import { DeadlineAlert } from './components/DeadlineAlert';
 import WorldMap from './components/WorldMap';
 import DomainMap from './components/DomainMap';
 
 // Import Engines
-import { useMapEngine } from './hooks/useMapEngine';
 import { useLoopEngine } from './hooks/useLoopEngine';
 import { useTaskEngine } from './hooks/useTaskEngine';
 import { useProgressEngine } from './hooks/useProgressEngine';
@@ -32,11 +31,7 @@ const INITIAL_PROJECTS: Project[] = [];
 const CLICK_SOUND_URL = 'https://assets.mixkit.co/active_storage/sfx/2571/2571-preview.mp3';
 const COMPLETE_SOUND_URL = 'https://assets.mixkit.co/active_storage/sfx/2013/2013-preview.mp3';
 
-import WorldMap from './components/WorldMap';
-import DomainMap from './components/DomainMap';
-
 export default function App() {
-  const mapRef = useRef<HTMLDivElement>(null);
   const [sessionStartTime] = useState(Date.now());
   const [uptime, setUptime] = useState('00:00:00');
 
@@ -72,24 +67,16 @@ export default function App() {
     soundEnabled: true,
   });
 
-  // 2. Map Engine
+  // 2. Loop Engine
   const { 
-    viewState, setViewState, isPanning, 
-    handleMouseDown, handleMouseMove, handleMouseUp, 
-    zoom, resetView, screenToMap 
-  } = useMapEngine(mapRef);
-
-  // 3. Loop Engine
-  const { 
-    projects, setProjects, draggingProjectId, setDraggingProjectId, 
-    scaleRing, deleteProject, dragRing 
+    projects, setProjects, deleteProject
   } = useLoopEngine(INITIAL_PROJECTS);
 
   const [domains, setDomains] = useState<Domain[]>(INITIAL_DOMAINS);
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [editingProjectId, setEditingProjectId] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [currentView, setCurrentView] = useState<'legacy' | 'world' | 'domain'>('world');
+  const [currentView, setCurrentView] = useState<'world' | 'domain'>('world');
   const [activeDomainId, setActiveDomainId] = useState<string | null>(null);
   
   // UI States
@@ -117,21 +104,6 @@ export default function App() {
     setTimeout(() => setIsReconstructing(false), 1500);
   };
 
-  const handleFocusOn = (id: string, type: 'RING' | 'DOMAIN') => {
-    if (type === 'RING') {
-      const ring = projects.find(p => p.id === id);
-      if (ring) {
-        setViewState({ x: -ring.x + window.innerWidth / 2, y: -ring.y + window.innerHeight / 2, zoom: 1 });
-        setSelectedProjectId(id);
-      }
-    } else {
-      const domain = domains.find(d => d.id === id);
-      if (domain) {
-        setViewState({ x: -domain.x + window.innerWidth / 2, y: -domain.y + window.innerHeight / 2, zoom: 0.8 });
-      }
-    }
-  };
-
   // Auto-hide loading screen after mount
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -143,12 +115,13 @@ export default function App() {
 
   // 4. Task Engine
   const { updateProject } = useTaskEngine(
+    projects,
     setProjects,
     domains,
     addLogEntry,
     (amount, reason) => gainXP(amount, reason, (msg) => setMessages(prev => [...prev, msg])),
     (updatedProjects) => {
-      const newlyUnlocked = checkAchievements(updatedProjects, stats);
+      const newlyUnlocked = checkAchievements(updatedProjects);
       if (newlyUnlocked.length > 0) {
         const broadcastMessages: ChatMessage[] = newlyUnlocked.map(a => ({
           id: `broadcast-${a.id}-${Date.now()}`,
@@ -161,6 +134,19 @@ export default function App() {
     },
     addTimeSpent
   );
+
+  const handleDismissTask = useCallback((projectId: string, taskId: string) => {
+    const project = projects.find(p => p.id === projectId);
+    if (!project) return;
+    const updatedTasks = project.tasks.map(t => t.id === taskId ? { ...t, lastAlertDismissedAt: Date.now() } : t);
+    updateProject({ ...project, tasks: updatedTasks });
+  }, [projects, updateProject]);
+
+  const handleDismissProject = useCallback((projectId: string) => {
+    const project = projects.find(p => p.id === projectId);
+    if (!project) return;
+    updateProject({ ...project, lastAlertDismissedAt: Date.now() });
+  }, [projects, updateProject]);
 
   useEffect(() => {
     addLogEntry('SYSTEM_AWAKENED', '系统提示：神经链路已建立', '系统觉醒阶段：初始化完成');
@@ -235,7 +221,7 @@ export default function App() {
 
       // Console logging as requested
       if (isInteractive) {
-        console.log(`[SoundEngine] Interactive element clicked: <${target.tagName.toLowerCase()}>`, target);
+        console.log(`[SoundEngine] Interactive element clicked: <${target.tagName.toLowerCase()}>`);
       } else {
         console.log(`[SoundEngine] Non-interactive area clicked: <${target.tagName.toLowerCase()}>`);
       }
@@ -305,16 +291,14 @@ export default function App() {
 
   const addNewProject = (domainId?: string) => {
     const domain = domains.find(d => d.id === domainId);
-    const rect = mapRef.current?.getBoundingClientRect();
-    const centerX = rect ? rect.width / 2 : window.innerWidth / 2;
-    const centerY = rect ? rect.height / 2 : window.innerHeight / 2;
-    const { x: mapX, y: mapY } = screenToMap(centerX, centerY);
+    const centerX = window.innerWidth / 2;
+    const centerY = window.innerHeight / 2;
 
     const newProject: Project = {
       id: Math.random().toString(36).substr(2, 9),
       name: '新闭环系统',
-      x: domain ? 50 : mapX - 68,
-      y: domain ? 50 : mapY - 68,
+      x: domain ? 50 : centerX - 68,
+      y: domain ? 50 : centerY - 68,
       scale: 1,
       color: domain ? domain.color : ['#0df2f2', '#ff00ff', '#00ff00', '#ffff00', '#ff4500'][Math.floor(Math.random() * 5)],
       tasks: [],
@@ -328,37 +312,32 @@ export default function App() {
     gainXP(20, `初始化闭环：${newProject.name}`);
   };
 
-  const addNewDomain = () => {
-    const names = ['音乐创作', '粉丝运营', '视频制作', '个人成长', '知识学习'];
-    const colors = ['#0df2f2', '#ff00ff', '#00ff00', '#ffff00', '#ff4500'];
-    const idx = Math.floor(Math.random() * names.length);
-    const rect = mapRef.current?.getBoundingClientRect();
-    const centerX = rect ? rect.width / 2 : window.innerWidth / 2;
-    const centerY = rect ? rect.height / 2 : window.innerHeight / 2;
-    const { x: mapX, y: mapY } = screenToMap(centerX, centerY);
-    
+  const updateDomain = (id: string, updates: Partial<Domain>) => {
+    setDomains(prev => prev.map(d => d.id === id ? { ...d, ...updates } : d));
+    const domain = domains.find(d => d.id === id);
+    if (domain && updates.name) {
+      addLogEntry('DOMAIN_PROGRESS', '系统记录：领域名称已更新', updates.name);
+    }
+  };
+
+  const handleAddDomain = () => {
+    const lastDomain = domains[domains.length - 1];
+    const newX = lastDomain ? lastDomain.x + 300 : window.innerWidth / 2 - 200;
+    const newY = lastDomain ? lastDomain.y + (Math.random() * 200 - 100) : window.innerHeight / 2 - 200;
+
     const newDomain: Domain = {
       id: Math.random().toString(36).substr(2, 9),
-      name: names[idx],
-      color: colors[idx],
-      x: mapX - 200,
-      y: mapY - 200,
+      name: `新领域 ${domains.length + 1}`,
+      color: ['#0df2f2', '#ff00ff', '#00ff00', '#ffff00', '#ff4500'][Math.floor(Math.random() * 5)],
+      x: newX,
+      y: newY,
       width: 400,
       height: 400,
     };
     setDomains(prev => [...prev, newDomain]);
-    addLogEntry('DOMAIN_CREATED', '系统提示：新领域已被开拓', newDomain.name);
-    gainXP(50, `开拓领域：${newDomain.name}`);
+    addLogEntry('DOMAIN_CREATED', '系统记录：新领域已开拓', newDomain.name);
+    gainXP(50, `开拓新领域：${newDomain.name}`);
   };
-
-  const handleDragDomain = useCallback((id: string, x: number, y: number) => {
-    setDomains((prev) => prev.map((d) => {
-      if (d.id === id) {
-        return { ...d, x, y };
-      }
-      return d;
-    }));
-  }, []);
 
   const handleDeleteDomain = (id: string) => {
     const domain = domains.find(d => d.id === id);
@@ -471,33 +450,9 @@ export default function App() {
 
       {/* Main Map Area */}
       <main 
-        ref={mapRef}
-        className={cn(
-          "flex-1 relative overflow-hidden bg-[radial-gradient(circle_at_center,rgba(13,242,242,0.05)_0%,transparent_70%)]",
-          isPanning ? "cursor-grabbing" : "cursor-default"
-        )}
-        onMouseDown={(e) => handleMouseDown(e, () => setSelectedProjectId(null))}
-        onMouseMove={handleMouseMove}
-        onMouseUp={handleMouseUp}
-        onMouseLeave={handleMouseUp}
+        className="flex-1 relative overflow-hidden bg-[radial-gradient(circle_at_center,rgba(13,242,242,0.05)_0%,transparent_70%)]"
+        onClick={() => setSelectedProjectId(null)}
       >
-        {/* Grid Background */}
-        <div 
-          data-map-bg="true"
-          className="absolute inset-0 pointer-events-auto opacity-20"
-          style={{
-            backgroundImage: `
-              linear-gradient(to right, rgba(13, 242, 242, 0.1) 1px, transparent 1px),
-              linear-gradient(to bottom, rgba(13, 242, 242, 0.1) 1px, transparent 1px)
-            `,
-            backgroundSize: `${40 * viewState.scale}px ${40 * viewState.scale}px`,
-            backgroundPosition: `${viewState.x}px ${viewState.y}px`,
-          }}
-        />
-
-        {/* Scanlines */}
-        <div data-map-bg="true" className="absolute inset-0 pointer-events-none opacity-10 bg-[linear-gradient(to_bottom,transparent_50%,rgba(0,0,0,0.5)_50%)] bg-[length:100%_4px]" />
-
         {currentView === 'world' ? (
           <WorldMap 
             domains={domains}
@@ -506,130 +461,40 @@ export default function App() {
               setActiveDomainId(id);
               setCurrentView('domain');
             }}
+            onAddDomain={handleAddDomain}
+            onUpdateDomain={updateDomain}
           />
-        ) : currentView === 'domain' ? (
+        ) : (
           <DomainMap 
             domain={domains.find(d => d.id === activeDomainId)!}
             projects={projects.filter(p => p.domainId === activeDomainId)}
             selectedProjectId={selectedProjectId}
-            onBack={() => setCurrentView('world')}
+            onBack={() => {
+              setActiveDomainId(null);
+              setCurrentView('world');
+            }}
             onSelectProject={setSelectedProjectId}
             onEditProject={setEditingProjectId}
-            onDragProject={dragRing}
-            onAddProject={() => addNewProject(activeDomainId || undefined)}
+            onAddProject={() => addNewProject(activeDomainId!)}
           />
-        ) : (
-          <motion.div
-            animate={{ x: viewState.x, y: viewState.y, scale: viewState.scale }}
-            transition={{
-              x: { duration: 0 },
-              y: { duration: 0 },
-              scale: { type: 'spring', stiffness: 300, damping: 30 }
-            }}
-            className="absolute inset-0 rings-container"
-            data-map-bg="true"
-          >
-            {/* Domains */}
-            {domains.map(domain => (
-              <DomainArea 
-                key={domain.id} 
-                domain={domain} 
-                projects={projects.filter(p => p.domainId === domain.id)}
-                selectedProjectId={selectedProjectId}
-                isProjectDragging={!!draggingProjectId}
-                onAddProject={addNewProject}
-                onDrag={handleDragDomain}
-                onResize={(id, w, h) => setDomains(prev => prev.map(d => d.id === id ? { ...d, width: w, height: h } : d))}
-                onUpdate={(id, up) => setDomains(prev => prev.map(d => d.id === id ? { ...d, ...up } : d))}
-                onRingClick={setSelectedProjectId}
-                onRingDoubleClick={setEditingProjectId}
-                onRingDrag={(id, x, y) => dragRing(id, x, y, domains, (m, t) => addLogEntry('DOMAIN_PROGRESS', m, t), gainXP)}
-                onRingDragStart={setDraggingProjectId}
-                onDeleteDomain={handleDeleteDomain}
-              />
-            ))}
-
-            {/* Unbound Projects */}
-            {projects.filter(p => !p.domainId).map((project) => (
-              <Ring
-                key={project.id}
-                project={project}
-                x={project.x}
-                y={project.y}
-                isSelected={selectedProjectId === project.id}
-                onClick={() => setSelectedProjectId(project.id)}
-                onDoubleClick={() => setEditingProjectId(project.id)}
-                onDrag={(id, x, y) => dragRing(id, x, y, domains, (m, t) => addLogEntry('DOMAIN_PROGRESS', m, t), gainXP)}
-                onDragStart={() => setDraggingProjectId(project.id)}
-              />
-            ))}
-          </motion.div>
         )}
 
         {/* Map Controls */}
         <div className="absolute bottom-8 left-8 flex flex-col gap-2 z-30 hud-panel">
-          <button 
-            onClick={() => setCurrentView(prev => prev === 'legacy' ? 'world' : 'legacy')}
-            title={currentView === 'legacy' ? "切换到世界地图" : "切换到自由地图"}
-            className={`w-10 h-10 border rounded flex items-center justify-center transition-all mb-2 ${
-              currentView !== 'legacy' ? 'bg-primary text-background-dark border-primary shadow-[0_0_10px_rgba(13,242,242,0.4)]' : 'bg-background-dark/80 border-secondary/30 text-secondary hover:bg-secondary hover:text-background-dark'
-            }`}
-          >
-            <Globe size={18} />
-          </button>
-
-          <button 
-            onClick={addNewDomain}
-            title="开拓新领域"
-            className="w-10 h-10 bg-background-dark/80 border border-secondary/30 rounded flex items-center justify-center text-secondary hover:bg-secondary hover:text-background-dark transition-all mb-2"
-          >
-            <Box size={18} />
-          </button>
-          
-          {selectedProjectId && (
-            <div className="flex flex-col gap-2 mb-4 p-2 bg-primary/10 backdrop-blur-md border border-primary/30 rounded-lg animate-in fade-in slide-in-from-left-4">
-              <div className="flex items-center gap-2 px-1 mb-1">
-                <Maximize2 size={12} className="text-primary" />
-                <span className="text-[10px] font-bold text-primary uppercase tracking-tighter">圆环缩放</span>
-              </div>
-              <div className="flex flex-col gap-2">
-                <button 
-                  onClick={() => scaleRing(selectedProjectId, 0.1)}
-                  className="w-10 h-10 bg-background-dark/80 border border-primary/30 rounded flex items-center justify-center text-primary hover:bg-primary hover:text-background-dark transition-all"
-                >
-                  <Plus size={18} />
-                </button>
-                <button 
-                  onClick={() => scaleRing(selectedProjectId, -0.1)}
-                  className="w-10 h-10 bg-background-dark/80 border border-primary/30 rounded flex items-center justify-center text-primary hover:bg-primary hover:text-background-dark transition-all"
-                >
-                  <Minus size={18} />
-                </button>
-              </div>
-            </div>
-          )}
-
-          <button onClick={() => zoom(0.1)} className="w-10 h-10 bg-background-dark/80 backdrop-blur-md border border-primary/30 rounded-lg flex items-center justify-center text-primary hover:bg-primary hover:text-background-dark transition-all">
-            <Plus size={20} />
-          </button>
-          <button onClick={() => zoom(-0.1)} className="w-10 h-10 bg-background-dark/80 backdrop-blur-md border border-primary/30 rounded-lg flex items-center justify-center text-primary hover:bg-primary hover:text-background-dark transition-all">
-            <Minus size={20} />
-          </button>
-          <button onClick={resetView} className="w-10 h-10 bg-background-dark/80 backdrop-blur-md border border-primary/30 rounded-lg flex items-center justify-center text-primary hover:bg-primary hover:text-background-dark transition-all mt-2">
-            <RotateCcw size={20} />
-          </button>
         </div>
 
-        {/* Add Button */}
-        <div className="absolute top-8 left-8 z-30 hud-panel">
-          <button
-            onClick={() => addNewProject()}
-            className="flex items-center gap-2 px-4 py-2 bg-primary text-background-dark font-bold text-xs uppercase tracking-widest rounded shadow-[0_0_15px_rgba(13,242,242,0.4)] hover:bg-white transition-all"
-          >
-            <Plus size={16} />
-            创建新闭环
-          </button>
-        </div>
+        {/* Floating Add Button */}
+        <motion.button
+          drag
+          dragMomentum={false}
+          whileHover={{ scale: 1.1 }}
+          whileTap={{ scale: 0.9 }}
+          onClick={() => addNewProject(activeDomainId || undefined)}
+          className="absolute top-8 left-8 z-50 w-12 h-12 bg-primary text-background-dark rounded-full flex items-center justify-center shadow-[0_0_20px_rgba(13,242,242,0.5)] cursor-move"
+          title="创建新闭环"
+        >
+          <Plus size={24} />
+        </motion.button>
       </main>
 
       {/* Side Panel */}
@@ -706,6 +571,12 @@ export default function App() {
         achievements={achievements}
       />
 
+      <DeadlineAlert 
+        projects={projects}
+        onDismissTask={handleDismissTask}
+        onDismissProject={handleDismissProject}
+      />
+
       {/* AI Terminal */}
       <AITerminal 
         projects={projects}
@@ -714,15 +585,13 @@ export default function App() {
         setMessages={setMessages}
         onUpdateProjects={(newProjects) => {
           setProjects(newProjects);
-          checkAchievements(newProjects, stats);
+          checkAchievements(newProjects);
         }}
         onUpdateDomains={setDomains}
-        screenToMap={screenToMap}
         addLogEntry={addLogEntry}
         gainXP={(amount, reason) => gainXP(amount, reason, (msg) => setMessages(prev => [...prev, msg]))}
         soundEnabled={stats.soundEnabled}
         onTriggerReconstruction={triggerReconstruction}
-        onFocusOn={handleFocusOn}
       />
 
       {/* Bottom Nav */}

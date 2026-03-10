@@ -13,9 +13,10 @@ interface RingProps {
   onDoubleClick: () => void;
   onDrag: (id: string, x: number, y: number) => void;
   onDragStart?: () => void;
+  isDraggable?: boolean;
 }
 
-export const Ring: React.FC<RingProps> = ({ project, x, y, isSelected, onClick, onDoubleClick, onDrag, onDragStart }) => {
+export const Ring: React.FC<RingProps> = ({ project, x, y, isSelected, onClick, onDoubleClick, onDrag, onDragStart, isDraggable = true }) => {
   const radius = 60;
   const strokeWidth = 8;
   const center = radius + strokeWidth;
@@ -63,7 +64,7 @@ export const Ring: React.FC<RingProps> = ({ project, x, y, isSelected, onClick, 
 
   return (
     <motion.div
-      drag
+      drag={isDraggable}
       dragMomentum={false}
       onDragStart={() => {
         onDragStart?.();

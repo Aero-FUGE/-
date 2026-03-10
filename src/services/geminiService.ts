@@ -20,11 +20,27 @@ const createRingDeclaration: FunctionDeclaration = {
   name: "create_ring",
   parameters: {
     type: Type.OBJECT,
-    description: "创建一个新的闭环系统（Ring/Project）。",
+    description: "创建一个新的闭环系统（Ring/Project）。可以同时包含初始任务列表。",
     properties: {
       name: { type: Type.STRING, description: "闭环系统的名称" },
       domainId: { type: Type.STRING, description: "所属领域的 ID（可选）" },
+      domainName: { type: Type.STRING, description: "所属领域的名称（如果不知道 ID，可以提供名称，系统会尝试匹配或创建）" },
       color: { type: Type.STRING, description: "闭环的颜色（可选）" },
+      deadline: { type: Type.NUMBER, description: "截止日期时间戳（毫秒，可选）" },
+      tasks: {
+        type: Type.ARRAY,
+        description: "初始任务列表（可选）",
+        items: {
+          type: Type.OBJECT,
+          properties: {
+            name: { type: Type.STRING, description: "任务名称" },
+            estimatedTime: { type: Type.NUMBER, description: "预计耗时（分钟）" },
+            notes: { type: Type.STRING, description: "备注" },
+            deadline: { type: Type.NUMBER, description: "截止日期时间戳" }
+          },
+          required: ["name"]
+        }
+      }
     },
     required: ["name"],
   },
@@ -40,6 +56,7 @@ const addTaskDeclaration: FunctionDeclaration = {
       name: { type: Type.STRING, description: "任务的名称" },
       estimatedTime: { type: Type.NUMBER, description: "预计耗时（分钟）" },
       notes: { type: Type.STRING, description: "任务备注或详细描述" },
+      deadline: { type: Type.NUMBER, description: "截止日期时间戳（毫秒，可选）" },
     },
     required: ["ringId", "name", "estimatedTime"],
   },
@@ -49,13 +66,14 @@ const updateTaskDeclaration: FunctionDeclaration = {
   name: "update_task",
   parameters: {
     type: Type.OBJECT,
-    description: "更新指定任务的状态、时间或备注。",
+    description: "更新指定任务的状态、时间、备注或截止日期。",
     properties: {
       ringId: { type: Type.STRING, description: "闭环系统的 ID" },
       taskId: { type: Type.STRING, description: "任务的 ID" },
       status: { type: Type.STRING, enum: ["TODO", "IN_PROGRESS", "DONE"], description: "任务状态" },
       actualTime: { type: Type.NUMBER, description: "实际耗时（分钟）" },
       notes: { type: Type.STRING, description: "更新备注" },
+      deadline: { type: Type.NUMBER, description: "截止日期时间戳（毫秒，可选）" },
     },
     required: ["ringId", "taskId"],
   },
@@ -65,7 +83,7 @@ const updateRingDeclaration: FunctionDeclaration = {
   name: "update_ring",
   parameters: {
     type: Type.OBJECT,
-    description: "更新闭环系统的属性，如名称、大小（缩放）、颜色或位置。",
+    description: "更新闭环系统的属性，如名称、大小（缩放）、颜色、位置或截止日期。",
     properties: {
       id: { type: Type.STRING, description: "闭环系统的 ID" },
       name: { type: Type.STRING, description: "新的闭环名称" },
@@ -73,6 +91,21 @@ const updateRingDeclaration: FunctionDeclaration = {
       color: { type: Type.STRING, description: "颜色（十六进制）" },
       x: { type: Type.NUMBER, description: "地图 X 坐标" },
       y: { type: Type.NUMBER, description: "地图 Y 坐标" },
+      deadline: { type: Type.NUMBER, description: "截止日期时间戳（毫秒，可选）" },
+    },
+    required: ["id"],
+  },
+};
+
+const updateDomainDeclaration: FunctionDeclaration = {
+  name: "update_domain",
+  parameters: {
+    type: Type.OBJECT,
+    description: "更新领域的属性，如名称或颜色。",
+    properties: {
+      id: { type: Type.STRING, description: "领域的 ID" },
+      name: { type: Type.STRING, description: "新的领域名称" },
+      color: { type: Type.STRING, description: "新的领域颜色" },
     },
     required: ["id"],
   },
@@ -90,8 +123,32 @@ const organizeMapDeclaration: FunctionDeclaration = {
   },
 };
 
+const deleteRingDeclaration: FunctionDeclaration = {
+  name: "delete_ring",
+  parameters: {
+    type: Type.OBJECT,
+    description: "销毁指定的闭环系统。",
+    properties: {
+      id: { type: Type.STRING, description: "闭环系统的 ID" },
+    },
+    required: ["id"],
+  },
+};
+
+const deleteDomainDeclaration: FunctionDeclaration = {
+  name: "delete_domain",
+  parameters: {
+    type: Type.OBJECT,
+    description: "移除指定的领域。该领域下的闭环将变为未分类状态。",
+    properties: {
+      id: { type: Type.STRING, description: "领域的 ID" },
+    },
+    required: ["id"],
+  },
+};
+
 export interface AISystemAction {
-  type: 'CREATE_DOMAIN' | 'CREATE_RING' | 'ADD_TASK' | 'UPDATE_TASK' | 'DELETE_RING' | 'DELETE_DOMAIN' | 'UPDATE_RING' | 'ORGANIZE_MAP' | 'FOCUS_ON';
+  type: 'CREATE_DOMAIN' | 'CREATE_RING' | 'ADD_TASK' | 'UPDATE_TASK' | 'DELETE_RING' | 'DELETE_DOMAIN' | 'UPDATE_RING' | 'ORGANIZE_MAP' | 'FOCUS_ON' | 'UPDATE_DOMAIN';
   payload: any;
 }
 
@@ -118,36 +175,41 @@ export async function processSystemCommand(
             {
               text: `你是一个名为「系统」的 AI 助手，运行在宿主（用户）的个人人生操作系统中。
             你的角色不是聊天助手，而是“任务解析引擎 + 闭环系统构建器”。
-            你不会对用户内容进行总结、压缩、归类，而是逐字逐句解析、拆解、显性化任务。
+            你运行在一个“可视化世界 + 技能树 + 领域宇宙”的架构中。
 
             行为规则：
-            1. **原子任务拆解原则**：
-               用户说的每一句话都可能包含一个或多个任务，你必须将其拆分为最小执行单位。
-               一条任务 = 一个动作。不得合并、不得省略、不得抽象成类别。
+            1. **领域自动分类原则**：
+               - 宿主的所有任务必须归属于某个“领域（Domain）”。
+               - 你必须根据任务内容自动判断它属于现有哪个领域（如：音乐、产品、编程、健身、IP运营等）。
+               - 如果现有领域不匹配，你可以调用 'create_domain' 创建一个新领域。
+               - 在创建闭环（Ring）时，必须通过 'domainId' 或 'domainName' 将其关联到对应的领域子世界中。**优先使用 domainId**。
+               - 如果宿主要求修改领域名称，请使用 'update_domain'。
+
+            2. **原子任务拆解原则**：
+               - 用户说的每一句话都可能包含一个或多个任务，你必须将其拆分为最小执行单位。
+               - 一条任务 = 一个动作。不得合并、不得省略、不得抽象成类别。
             
-            2. **严格逐句解析**：
-               用户说的长句必须拆分成多条任务。不得“归纳成一类”。不得输出总结性任务。只能输出用户实际表达过的任务动作。
+            3. **严格逐句解析**：
+               - 用户说的长句必须拆分成多条任务。不得“归纳成一类”。不得输出总结性任务。只能输出用户实际表达过的任务动作。
             
-            3. **信息优先级规则**：
-               用户明确说出的时间、时长、顺序、状态必须 100% 按照原意保留，不得修改。
-               时间未给出的，你不得擅自生成，可以询问用户。
+            4. **闭环结构生成与推演**：
+               - 从拆解后的任务中，自动组建一个完整闭环结构：
+                 - 主任务（闭环名）
+                 - 子任务（按顺序排列，形成可视化的子环节）
+                 - 每个子任务附带时长（如用户已提供）
+                 - 必要时加入“检验节点”“导出节点”“发布节点”等收尾动作
+               - 你需要对任务进行“推演”，如果用户只说了一个目标，你需要自动拆解出实现该目标所需的关键子步骤。
+               - **重要**：在创建闭环时，请尽量在 'create_ring' 的 'tasks' 参数中直接包含所有拆解出的子任务，这样可以确保它们被正确关联。
             
-            4. **闭环结构生成**：
-               从拆解后的任务中，自动组建一个完整闭环结构：
-               - 主任务（闭环名）
-               - 子任务（按顺序排列）
-               - 每个子任务附带时长（如用户已提供）
-               - 必要时加入“检验节点”“导出节点”“发布节点”等收尾动作
-               用户未明确允许之前，不得生成额外推测任务。用户说“后面的任务你自动补全”时，才可以生成未来步骤。
-            
-            5. **不得凭空创造任务**：
-               除非用户明确指示“自动推导”“自动补全”，否则你不能添加任何用户未说过的任务。
+            5. **信息优先级规则**：
+               - 用户明确说出的时间、时长、顺序、状态必须 100% 按照原意保留。
+               - 时间未给出的，你应根据经验进行合理预估（如：写代码 30min，开会 15min）。
             
             6. **严禁总结模式**：
-               禁止使用“整体流程是…”、“主要包括…”、“核心任务有…”等总结性表达。
+               - 禁止使用“整体流程是…”、“主要包括…”、“核心任务有…”等总结性表达。
             
             7. **模糊表达处理**：
-               若用户描述模糊、不完整、不确定，你必须主动追问，而不是自行决定。
+               - 若用户描述模糊，你应基于常识进行拆解，并在回复中告知宿主你的拆解逻辑。
 
             8. **可扩展权限**：
                你可以自动在数据库中创建任务、分配父子结构、赋予权重、登记预计时长。但所有行为必须基于“用户语言解析结果”。
@@ -174,7 +236,10 @@ export async function processSystemCommand(
             addTaskDeclaration, 
             updateTaskDeclaration,
             updateRingDeclaration,
-            organizeMapDeclaration
+            updateDomainDeclaration,
+            organizeMapDeclaration,
+            deleteRingDeclaration,
+            deleteDomainDeclaration
           ] 
         }],
         thinkingConfig: {
@@ -210,6 +275,15 @@ export async function processSystemCommand(
             break;
           case "organize_map":
             actions.push({ type: 'ORGANIZE_MAP', payload: call.args });
+            break;
+          case "delete_ring":
+            actions.push({ type: 'DELETE_RING', payload: call.args });
+            break;
+          case "delete_domain":
+            actions.push({ type: 'DELETE_DOMAIN', payload: call.args });
+            break;
+          case "update_domain":
+            actions.push({ type: 'UPDATE_DOMAIN', payload: call.args });
             break;
         }
       }

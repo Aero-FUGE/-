@@ -12,12 +12,10 @@ interface AITerminalProps {
   setMessages: React.Dispatch<React.SetStateAction<ChatMessage[]>>;
   onUpdateProjects: (projects: Project[]) => void;
   onUpdateDomains: (domains: Domain[]) => void;
-  screenToMap: (x: number, y: number) => { x: number; y: number };
   addLogEntry: (type: any, eventName: string, targetName: string) => void;
   gainXP: (amount: number, reason: string) => void;
   soundEnabled: boolean;
   onTriggerReconstruction: () => void;
-  onFocusOn: (id: string, type: 'RING' | 'DOMAIN') => void;
 }
 
 export const AITerminal: React.FC<AITerminalProps> = ({ 
@@ -27,12 +25,10 @@ export const AITerminal: React.FC<AITerminalProps> = ({
   setMessages, 
   onUpdateProjects, 
   onUpdateDomains,
-  screenToMap,
   addLogEntry,
   gainXP,
   soundEnabled,
   onTriggerReconstruction,
-  onFocusOn
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [input, setInput] = useState('');
@@ -67,13 +63,12 @@ export const AITerminal: React.FC<AITerminalProps> = ({
       switch (action.type) {
         case 'CREATE_DOMAIN': {
           const { name, color } = action.payload;
-          const { x, y } = screenToMap(window.innerWidth / 2, window.innerHeight / 2);
           const newDomain: Domain = {
             id: Math.random().toString(36).substr(2, 9),
             name: name || '新领域',
             color: color || '#0df2f2',
-            x: x - 200,
-            y: y - 200,
+            x: window.innerWidth / 2 - 200,
+            y: window.innerHeight / 2 - 200,
             width: 400,
             height: 400,
           };
@@ -84,18 +79,18 @@ export const AITerminal: React.FC<AITerminalProps> = ({
           break;
         }
         case 'CREATE_RING': {
-          const { name, domainId, color, id } = action.payload;
+          const { name, domainId, color, id, deadline } = action.payload;
           const domain = updatedDomains.find(d => d.id === domainId);
-          const { x, y } = screenToMap(window.innerWidth / 2, window.innerHeight / 2);
           const newProject: Project = {
             id: id || Math.random().toString(36).substr(2, 9),
             name: name || '新闭环',
-            x: domain ? 50 : x - 68,
-            y: domain ? 50 : y - 68,
+            x: domain ? 50 : window.innerWidth / 2 - 68,
+            y: domain ? 50 : window.innerHeight / 2 - 68,
             scale: 1,
             color: color || (domain ? domain.color : '#0df2f2'),
             tasks: [],
             domainId,
+            deadline,
           };
           updatedProjects.push(newProject);
           addLogEntry('RING_CREATED', 'AI 神经链路：检测到新闭环初始化', newProject.name);
@@ -104,7 +99,7 @@ export const AITerminal: React.FC<AITerminalProps> = ({
           break;
         }
         case 'ADD_TASK': {
-          const { ringId, name, estimatedTime, notes } = action.payload;
+          const { ringId, name, estimatedTime, notes, deadline } = action.payload;
           updatedProjects = updatedProjects.map(p => {
             if (p.id === ringId) {
               const newTask: Task = {
@@ -115,6 +110,7 @@ export const AITerminal: React.FC<AITerminalProps> = ({
                 status: TaskStatus.TODO,
                 notes: notes || '',
                 order: p.tasks.length,
+                deadline,
               };
               addLogEntry('TASK_PROGRESS', 'AI 神经链路：任务已注入', newTask.name);
               gainXP(5, `AI 注入任务：${newTask.name}`);
@@ -126,7 +122,7 @@ export const AITerminal: React.FC<AITerminalProps> = ({
           break;
         }
         case 'UPDATE_TASK': {
-          const { ringId, taskId, status, actualTime, notes } = action.payload;
+          const { ringId, taskId, status, actualTime, notes, deadline } = action.payload;
           updatedProjects = updatedProjects.map(p => {
             if (p.id === ringId) {
               const updatedTasks = p.tasks.map(t => {
@@ -141,6 +137,7 @@ export const AITerminal: React.FC<AITerminalProps> = ({
                     status: (status as TaskStatus) || t.status,
                     actualTime: actualTime !== undefined ? actualTime : t.actualTime,
                     notes: notes !== undefined ? notes : t.notes,
+                    deadline: deadline !== undefined ? deadline : t.deadline,
                   };
                 }
                 return t;
@@ -153,7 +150,7 @@ export const AITerminal: React.FC<AITerminalProps> = ({
           break;
         }
         case 'UPDATE_RING': {
-          const { id, name, scale, color, x, y } = action.payload;
+          const { id, name, scale, color, x, y, deadline } = action.payload;
           updatedProjects = updatedProjects.map(p => {
             if (p.id === id) {
               return {
@@ -163,10 +160,27 @@ export const AITerminal: React.FC<AITerminalProps> = ({
                 color: color || p.color,
                 x: x !== undefined ? x : p.x,
                 y: y !== undefined ? y : p.y,
+                deadline: deadline !== undefined ? deadline : p.deadline,
               };
             }
             return p;
           });
+          hasChanges = true;
+          break;
+        }
+        case 'DELETE_RING': {
+          const { id } = action.payload;
+          updatedProjects = updatedProjects.filter(p => p.id !== id);
+          addLogEntry('RING_DELETED', 'AI 神经链路：闭环系统已销毁', id);
+          hasChanges = true;
+          break;
+        }
+        case 'DELETE_DOMAIN': {
+          const { id } = action.payload;
+          updatedDomains = updatedDomains.filter(d => d.id !== id);
+          // Also unbind projects from this domain
+          updatedProjects = updatedProjects.map(p => p.domainId === id ? { ...p, domainId: undefined } : p);
+          addLogEntry('DOMAIN_DELETED', 'AI 神经链路：领域已被移除', id);
           hasChanges = true;
           break;
         }
@@ -184,9 +198,7 @@ export const AITerminal: React.FC<AITerminalProps> = ({
           break;
         }
         case 'FOCUS_ON': {
-          const { id, type } = action.payload;
-          // Small delay to ensure the object is created/updated in state
-          setTimeout(() => onFocusOn(id, type), 100);
+          // Focus functionality removed as legacy map is disabled
           break;
         }
       }

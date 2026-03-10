@@ -21,6 +21,8 @@ export interface Task {
   timerStartTime?: number; // timestamp when timer started/resumed
   timerAccumulatedTime?: number; // in seconds
   isTimerRunning?: boolean;
+  deadline?: number; // timestamp
+  lastAlertDismissedAt?: number; // timestamp
 }
 
 export interface Achievement {
@@ -69,6 +71,7 @@ export interface Domain {
   y: number;
   width: number;
   height: number;
+  deadline?: number; // Added for domain-level deadline if needed, but user asked for Ring and Task
 }
 
 export interface Project {
@@ -81,6 +84,8 @@ export interface Project {
   color: string;
   isCompleted?: boolean; // Track if completion effect has been triggered
   domainId?: string;
+  deadline?: number; // timestamp
+  lastAlertDismissedAt?: number; // timestamp
 }
 
 export interface ChatMessage {
