@@ -20,27 +20,12 @@ const createRingDeclaration: FunctionDeclaration = {
   name: "create_ring",
   parameters: {
     type: Type.OBJECT,
-    description: "创建一个新的闭环系统（Ring/Project）。可以同时包含初始任务列表。",
+    description: "创建一个新的闭环系统（Ring/Project）。",
     properties: {
       name: { type: Type.STRING, description: "闭环系统的名称" },
       domainId: { type: Type.STRING, description: "所属领域的 ID（可选）" },
-      domainName: { type: Type.STRING, description: "所属领域的名称（如果不知道 ID，可以提供名称，系统会尝试匹配或创建）" },
       color: { type: Type.STRING, description: "闭环的颜色（可选）" },
       deadline: { type: Type.NUMBER, description: "截止日期时间戳（毫秒，可选）" },
-      tasks: {
-        type: Type.ARRAY,
-        description: "初始任务列表（可选）",
-        items: {
-          type: Type.OBJECT,
-          properties: {
-            name: { type: Type.STRING, description: "任务名称" },
-            estimatedTime: { type: Type.NUMBER, description: "预计耗时（分钟）" },
-            notes: { type: Type.STRING, description: "备注" },
-            deadline: { type: Type.NUMBER, description: "截止日期时间戳" }
-          },
-          required: ["name"]
-        }
-      }
     },
     required: ["name"],
   },
@@ -97,20 +82,6 @@ const updateRingDeclaration: FunctionDeclaration = {
   },
 };
 
-const updateDomainDeclaration: FunctionDeclaration = {
-  name: "update_domain",
-  parameters: {
-    type: Type.OBJECT,
-    description: "更新领域的属性，如名称或颜色。",
-    properties: {
-      id: { type: Type.STRING, description: "领域的 ID" },
-      name: { type: Type.STRING, description: "新的领域名称" },
-      color: { type: Type.STRING, description: "新的领域颜色" },
-    },
-    required: ["id"],
-  },
-};
-
 const organizeMapDeclaration: FunctionDeclaration = {
   name: "organize_map",
   parameters: {
@@ -148,7 +119,7 @@ const deleteDomainDeclaration: FunctionDeclaration = {
 };
 
 export interface AISystemAction {
-  type: 'CREATE_DOMAIN' | 'CREATE_RING' | 'ADD_TASK' | 'UPDATE_TASK' | 'DELETE_RING' | 'DELETE_DOMAIN' | 'UPDATE_RING' | 'ORGANIZE_MAP' | 'FOCUS_ON' | 'UPDATE_DOMAIN';
+  type: 'CREATE_DOMAIN' | 'CREATE_RING' | 'ADD_TASK' | 'UPDATE_TASK' | 'DELETE_RING' | 'DELETE_DOMAIN' | 'UPDATE_RING' | 'ORGANIZE_MAP' | 'FOCUS_ON';
   payload: any;
 }
 
@@ -182,8 +153,7 @@ export async function processSystemCommand(
                - 宿主的所有任务必须归属于某个“领域（Domain）”。
                - 你必须根据任务内容自动判断它属于现有哪个领域（如：音乐、产品、编程、健身、IP运营等）。
                - 如果现有领域不匹配，你可以调用 'create_domain' 创建一个新领域。
-               - 在创建闭环（Ring）时，必须通过 'domainId' 或 'domainName' 将其关联到对应的领域子世界中。**优先使用 domainId**。
-               - 如果宿主要求修改领域名称，请使用 'update_domain'。
+               - 在创建闭环（Ring）时，必须通过 'domainId' 将其关联到对应的领域子世界中。
 
             2. **原子任务拆解原则**：
                - 用户说的每一句话都可能包含一个或多个任务，你必须将其拆分为最小执行单位。
@@ -199,7 +169,6 @@ export async function processSystemCommand(
                  - 每个子任务附带时长（如用户已提供）
                  - 必要时加入“检验节点”“导出节点”“发布节点”等收尾动作
                - 你需要对任务进行“推演”，如果用户只说了一个目标，你需要自动拆解出实现该目标所需的关键子步骤。
-               - **重要**：在创建闭环时，请尽量在 'create_ring' 的 'tasks' 参数中直接包含所有拆解出的子任务，这样可以确保它们被正确关联。
             
             5. **信息优先级规则**：
                - 用户明确说出的时间、时长、顺序、状态必须 100% 按照原意保留。
@@ -236,7 +205,6 @@ export async function processSystemCommand(
             addTaskDeclaration, 
             updateTaskDeclaration,
             updateRingDeclaration,
-            updateDomainDeclaration,
             organizeMapDeclaration,
             deleteRingDeclaration,
             deleteDomainDeclaration
@@ -281,9 +249,6 @@ export async function processSystemCommand(
             break;
           case "delete_domain":
             actions.push({ type: 'DELETE_DOMAIN', payload: call.args });
-            break;
-          case "update_domain":
-            actions.push({ type: 'UPDATE_DOMAIN', payload: call.args });
             break;
         }
       }
